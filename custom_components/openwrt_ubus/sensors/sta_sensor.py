@@ -310,7 +310,6 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
             manufacturer="Unknown",
             model="WiFi Device",
             connections={("mac", self.mac_address)},
-            via_device=(DOMAIN, self._host),
         )
 
     @property

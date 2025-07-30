@@ -205,8 +205,25 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
             name=device_name,
             model="Network Device",
             connections={("mac", self.mac_address)},
-            via_device=(DOMAIN, self._host),
+            via_device=self.via_device
         )
+
+    @property
+    def ap_device(self) -> str:
+        """Return the access point device this device is connected to."""
+        # Get device statistics from shared coordinator
+        device_stats = self.coordinator.data.get("device_statistics", {})
+        device_data = device_stats.get(self.mac_address) or device_stats.get(self.mac_address.upper())
+        if device_data:
+            return device_data.get("ap_device", "Unknown AP")
+        return "Unknown AP"
+
+    @property
+    def via_device(self) -> tuple[str, str]:
+        """Return the via device info for this device."""
+        if self.ap_device != "Unknown AP":
+            return (DOMAIN, f"{self._host}_ap_{self.ap_device}")
+        return (DOMAIN, self._host)
 
     def _get_device_name(self) -> str:
         """Get the device name from coordinator data or fallback to MAC."""
@@ -217,9 +234,7 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
         device_data = device_stats.get(self.mac_address) or device_stats.get(self.mac_address.upper())
         
         if device_data:
-            ap_device = device_data.get("ap_device", "Unknown AP")
-            base_name = f"{connected_router}({ap_device})" if ap_device != "Unknown AP" else connected_router
-            
+            base_name = f"{connected_router}({self.ap_device})" if self.ap_device != "Unknown AP" else connected_router
             hostname = device_data.get("hostname")
             if hostname and hostname != self.mac_address and hostname != self.mac_address.upper() and hostname != "*":
                 return f"{base_name} {hostname}"
