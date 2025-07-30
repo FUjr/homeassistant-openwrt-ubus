@@ -23,6 +23,8 @@
 *Home Assistant 中的系统信息传感器*
 
 ### 🔧 高级功能
+- **服务控制**：启动、停止、启用和禁用 OpenWrt 系统服务
+- **批量 API 优化**：使用批量 API 调用进行高效数据检索
 - **可配置轮询**：为不同传感器类型调整更新间隔
 - **多软件支持**：兼容各种 OpenWrt 软件配置
 - **设备注册表集成**：正确的设备识别和管理
@@ -75,6 +77,9 @@
 | 🔑 密码 | 登录密码 | - | 路由器密码 |
 | 📡 无线软件 | 无线监控方法 | iwinfo | iwinfo, hostapd |
 | 🌐 DHCP 软件 | DHCP 客户端检测方法 | dnsmasq | dnsmasq, odhcpd, none |
+| ⏱️ 系统传感器超时 | 系统数据获取超时 | 30秒 | 5-300秒 |
+| 📊 QModem 传感器超时 | QModem 数据获取超时 | 30秒 | 5-300秒 |
+| ⚙️ 服务超时 | 服务控制超时 | 30秒 | 5-300秒 |
 
 ## 📋 实体
 
@@ -82,8 +87,12 @@
 - **无线设备**：所有连接的无线客户端
 - **DHCP 客户端**：所有 DHCP 分配的设备（如果启用了 DHCP 监控）
 
+### 服务控制
+- **🔄 开关实体**：控制 OpenWrt 系统服务（启动/停止）
+- **⚡ 按钮实体**：服务管理的快速操作（启动、停止、启用、禁用、重启）
+
 ![已连接设备](imgs/system_info_connected_devices.png)
-*Home Assistant 中已连接设备的概览*
+*Home Assistant 中已连接设备和服务控制的概览*
 
 ### 传感器
 
@@ -114,6 +123,37 @@
 
 ![AP 主模式](imgs/ap_info_master.png)
 *主模式下的接入点 - 显示托管网络信息*
+
+### 🎛️ 服务控制
+集成提供全面的服务控制功能：
+
+#### 开关实体
+- **服务开关**：实时状态更新的服务开/关切换
+- **状态监控**：服务运行状态的实时显示
+- **批量状态更新**：多个服务状态的高效轮询
+
+#### 按钮实体
+- **启动服务**：启动已停止的服务
+- **停止服务**：停止正在运行的服务
+- **启用服务**：启用服务在启动时自动启动
+- **禁用服务**：禁用服务自动启动
+- **重启服务**：重启正在运行的服务（先停止再启动）
+
+**可用服务包括**：
+- `dnsmasq`：DNS 和 DHCP 服务器
+- `dropbear`：SSH 服务器
+- `firewall`：防火墙服务
+- `network`：网络配置
+- `uhttpd`：Web 服务器
+- `wpad`：无线配置守护程序
+- 以及许多其他系统服务...
+
+**服务控制功能**：
+- ✅ 实时状态监控
+- ⚡ 状态变化的即时响应
+- 🔄 操作后自动状态刷新
+- 🛡️ 用户友好的错误处理消息
+- 📊 性能优化的批量 API
 
 ## 🔧 故障排除
 
@@ -221,6 +261,10 @@ custom_components/openwrt_ubus/
 ├── const.py                 # 常量和配置
 ├── device_tracker.py        # 设备跟踪平台
 ├── sensor.py               # 传感器平台协调器
+├── switch.py               # 服务控制开关
+├── button.py               # 服务控制按钮
+├── extended_ubus.py        # 增强的 ubus 客户端与批量 API
+├── shared_data_manager.py  # 共享数据管理和优化
 ├── manifest.json           # 集成清单
 ├── strings.json            # UI 字符串
 ├── services.yaml           # 服务定义
@@ -232,7 +276,8 @@ custom_components/openwrt_ubus/
 │   ├── __init__.py
 │   ├── system_sensor.py    # 系统信息传感器
 │   ├── qmodem_sensor.py    # QModem/LTE 传感器
-│   └── sta_sensor.py       # 无线工作站传感器
+│   ├── sta_sensor.py       # 无线工作站传感器
+│   └── ap_sensor.py        # 接入点传感器
 └── translations/           # 本地化文件
     ├── en.json
     └── zh.json

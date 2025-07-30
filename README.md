@@ -23,6 +23,8 @@ A custom Home Assistant integration that connects to OpenWrt routers via the ubu
 *System information sensors in Home Assistant*
 
 ### 🔧 Advanced Features
+- **Service Control**: Start, stop, enable, and disable OpenWrt system services
+- **Batch API Optimization**: Efficient data retrieval using batch API calls
 - **Configurable Polling**: Adjustable update intervals for different sensor types
 - **Multiple Software Support**: Compatible with various OpenWrt software configurations
 - **Device Registry Integration**: Proper device identification and management
@@ -75,6 +77,9 @@ Your OpenWrt router must have:
 | 🔑 Password | Login password | - | Router password |
 | 📡 Wireless Software | Wireless monitoring method | iwinfo | iwinfo, hostapd |
 | 🌐 DHCP Software | DHCP client detection method | dnsmasq | dnsmasq, odhcpd, none |
+| ⏱️ System Sensor Timeout | System data fetch timeout | 30s | 5s-300s |
+| 📊 QModem Sensor Timeout | QModem data fetch timeout | 30s | 5s-300s |
+| ⚙️ Service Timeout | Service control timeout | 30s | 5s-300s |
 
 ## 📋 Entities
 
@@ -82,8 +87,12 @@ Your OpenWrt router must have:
 - **Wireless Devices**: All connected wireless clients
 - **DHCP Clients**: All DHCP-assigned devices (if DHCP monitoring enabled)
 
+### Service Control
+- **🔄 Switch Entities**: Control OpenWrt system services (start/stop)
+- **⚡ Button Entities**: Quick actions for service management (start, stop, enable, disable, restart)
+
 ![Connected Devices](imgs/system_info_connected_devices.png)
-*Overview of connected devices in Home Assistant*
+*Overview of connected devices and service controls in Home Assistant*
 
 ### Sensors
 
@@ -114,6 +123,37 @@ The integration provides detailed information about both AP client mode and mast
 
 ![AP Master Mode](imgs/ap_info_master.png)
 *Access Point in master mode - showing hosted network information*
+
+### 🎛️ Service Control
+The integration provides comprehensive service control capabilities:
+
+#### Switch Entities
+- **Service Switches**: Toggle services on/off with real-time status updates
+- **Status Monitoring**: Live display of service running state
+- **Batch Status Updates**: Efficient polling of multiple service states
+
+#### Button Entities
+- **Start Service**: Start a stopped service
+- **Stop Service**: Stop a running service  
+- **Enable Service**: Enable service to start automatically on boot
+- **Disable Service**: Disable service from auto-starting
+- **Restart Service**: Restart a running service (stop then start)
+
+**Available Services Include**:
+- `dnsmasq`: DNS and DHCP server
+- `dropbear`: SSH server
+- `firewall`: Firewall service
+- `network`: Network configuration
+- `uhttpd`: Web server
+- `wpad`: Wireless configuration daemon
+- And many more system services...
+
+**Service Control Features**:
+- ✅ Real-time status monitoring
+- ⚡ Instant response to state changes
+- 🔄 Automatic status refresh after operations
+- 🛡️ Error handling with user-friendly messages
+- 📊 Batch API optimization for performance
 
 ## 🔧 Troubleshooting
 
@@ -221,6 +261,10 @@ custom_components/openwrt_ubus/
 ├── const.py                 # Constants and configuration
 ├── device_tracker.py        # Device tracking platform
 ├── sensor.py               # Sensor platform coordinator
+├── switch.py               # Service control switches
+├── button.py               # Service control buttons
+├── extended_ubus.py        # Enhanced ubus client with batch API
+├── shared_data_manager.py  # Shared data management and optimization
 ├── manifest.json           # Integration manifest
 ├── strings.json            # UI strings
 ├── services.yaml           # Service definitions
@@ -232,7 +276,8 @@ custom_components/openwrt_ubus/
 │   ├── __init__.py
 │   ├── system_sensor.py    # System information sensors
 │   ├── qmodem_sensor.py    # QModem/LTE sensors
-│   └── sta_sensor.py       # Wireless station sensors
+│   ├── sta_sensor.py       # Wireless station sensors
+│   └── ap_sensor.py        # Access Point sensors
 └── translations/           # Localization files
     ├── en.json
     └── zh.json
