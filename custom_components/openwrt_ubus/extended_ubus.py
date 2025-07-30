@@ -17,6 +17,7 @@ from .const import (
     API_SUBSYS_SYSTEM,
     API_SUBSYS_UCI,
     API_SUBSYS_QMODEM,
+    API_SUBSYS_RC,
     API_METHOD_BOARD,
     API_METHOD_GET,
     API_METHOD_GET_AP,
@@ -26,6 +27,8 @@ from .const import (
     API_METHOD_INFO,
     API_METHOD_READ,
     API_METHOD_REBOOT,
+    API_METHOD_LIST,
+    API_METHOD_INIT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -293,5 +296,123 @@ class ExtendedUbus(Ubus):
                             _LOGGER.debug("Skipping AP device %s - no SSID found", ap_device)
                 except (IndexError, KeyError) as exc:
                     _LOGGER.debug("Error parsing AP info for %s: %s", ap_device, exc)
-                    
+        
         return ap_info_data
+
+    # RC (service control) specific methods
+    async def list_services(self, include_status=False):
+        """List available services, optionally including their status."""
+        if not include_status:
+            # Just get service list
+            return await self.api_call(API_RPC_CALL, API_SUBSYS_RC, API_METHOD_LIST)
+        
+        # Get service list first
+        service_list_result = await self.api_call(API_RPC_CALL, API_SUBSYS_RC, API_METHOD_LIST)
+        if not service_list_result:
+            _LOGGER.warning("Failed to get service list from RC")
+            return {}
+        
+        _LOGGER.debug("Got service list: %s", service_list_result)
+        
+        # Build batch calls for each service status
+        services_with_status = {}
+        status_rpcs = []
+        service_names = []
+        
+        for service_name in service_list_result:
+            service_names.append(service_name)
+            # Use "list" method with service name to get specific service status
+            status_call = json.loads(self.build_api(
+                API_RPC_CALL,
+                API_SUBSYS_RC,
+                API_METHOD_LIST,
+                {"name": service_name}
+            ))
+            status_rpcs.append(status_call)
+        
+        # Execute batch call for all service statuses
+        if status_rpcs:
+            _LOGGER.debug("Executing batch call for %d services", len(status_rpcs))
+            status_results = await self.batch_call(status_rpcs)
+            
+            if status_results:
+                _LOGGER.debug("Got %d status results", len(status_results))
+                for i, result in enumerate(status_results):
+                    if i < len(service_names):
+                        service_name = service_names[i]
+                        _LOGGER.debug("Processing result %d for service %s: %s", i, service_name, result)
+                        
+                        if result and "result" in result and len(result["result"]) > 1:
+                            # Service status format: [session_id, services_dict]
+                            services_dict = result["result"][1] if len(result["result"]) > 1 else {}
+                            _LOGGER.debug("Raw services dict for %s: %s", service_name, services_dict)
+                            
+                            # Extract the specific service from the services dict
+                            if isinstance(services_dict, dict) and service_name in services_dict:
+                                service_status = services_dict[service_name]
+                                _LOGGER.debug("Extracted service status for %s: %s", service_name, service_status)
+                                
+                                # Parse service status - OpenWrt RC returns different formats
+                                parsed_status = self._parse_service_status(service_status, service_name)
+                                services_with_status[service_name] = parsed_status
+                            else:
+                                _LOGGER.debug("Service %s not found in response dict, using default", service_name)
+                                services_with_status[service_name] = {"running": False, "enabled": False}
+                        else:
+                            # Default status if no result
+                            _LOGGER.debug("No valid result for service %s, using default", service_name)
+                            services_with_status[service_name] = {"running": False, "enabled": False}
+            else:
+                _LOGGER.warning("Batch call returned no results")
+        
+        _LOGGER.debug("Final services with status: %s", services_with_status)
+        return services_with_status
+    
+    def _parse_service_status(self, status_data, service_name):
+        """Parse service status from RC API response."""
+        _LOGGER.debug("Parsing service status for %s: %s (type: %s)", service_name, status_data, type(status_data))
+        
+        if not status_data:
+            _LOGGER.debug("Service %s: No status data, returning disabled", service_name)
+            return {"running": False, "enabled": False}
+        
+        # OpenWrt RC list returns a dict with service properties:
+        # {"start": 99, "enabled": true, "running": false}
+        if isinstance(status_data, dict):
+            _LOGGER.debug("Service %s: Dict status keys=%s", service_name, list(status_data.keys()))
+            
+            # Extract running and enabled status
+            running = status_data.get("running", False)
+            enabled = status_data.get("enabled", False)
+            start_priority = status_data.get("start", 0)
+            
+            _LOGGER.debug("Service %s: running=%s, enabled=%s, start=%s", 
+                         service_name, running, enabled, start_priority)
+            
+            result = {
+                "running": bool(running),
+                "enabled": bool(enabled),
+                "start_priority": start_priority,
+                "raw_status": status_data
+            }
+            _LOGGER.debug("Service %s: Final parsed result=%s", service_name, result)
+            return result
+        
+        # Fallback for string or other formats (shouldn't happen with RC list)
+        if isinstance(status_data, str):
+            running = status_data.lower() in ["running", "active", "started"]
+            _LOGGER.debug("Service %s: String status '%s', running=%s", service_name, status_data, running)
+            return {"running": running, "enabled": running, "status": status_data}
+        
+        # Fallback for unexpected formats
+        _LOGGER.warning("Service %s: Unexpected status format (type %s): %s", service_name, type(status_data), status_data)
+        return {"running": False, "enabled": False, "raw_status": status_data}
+
+    async def service_action(self, service_name, action):
+        """Perform action on a service (start, stop, restart)."""
+        return await self.api_call(
+            API_RPC_CALL, 
+            API_SUBSYS_RC, 
+            API_METHOD_INIT, 
+            {"name": service_name, "action": action}
+        )

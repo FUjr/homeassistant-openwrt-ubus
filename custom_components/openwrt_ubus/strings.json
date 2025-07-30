@@ -18,7 +18,16 @@
         "data": {
           "enable_system_sensors": "Enable System Sensors",
           "enable_qmodem_sensors": "Enable QModem Sensors",
-          "enable_sta_sensors": "Enable Station (WiFi Device) Sensors"
+          "enable_sta_sensors": "Enable Station (WiFi Device) Sensors",
+          "enable_ap_sensors": "Enable Access Point Sensors",
+          "enable_service_controls": "Enable Service Controls"
+        }
+      },
+      "services": {
+        "title": "OpenWrt ubus - Service Selection",
+        "description": "Select services to control for {host} (found {services_count} services)",
+        "data": {
+          "selected_services": "Services to Control"
         }
       },
       "timeouts": {
@@ -34,7 +43,9 @@
     "error": {
       "cannot_connect": "Failed to connect",
       "invalid_auth": "Invalid authentication",
-      "unknown": "Unexpected error"
+      "unknown": "Unexpected error",
+      "cannot_get_services": "Failed to get services list",
+      "no_services_found": "No services found on the router"
     },
     "abort": {
       "already_configured": "Device is already configured"
@@ -211,6 +222,35 @@
       },
       "tx_bytes": {
         "name": "TX Data"
+      }
+    },
+    "switch": {
+      "service": {
+        "name": "{service_name} Service",
+        "state_attributes": {
+          "service_name": {
+            "name": "Service Name"
+          },
+          "host": {
+            "name": "Router Host"
+          }
+        }
+      }
+    },
+    "button": {
+      "service_restart": {
+        "name": "Restart {service_name}",
+        "state_attributes": {
+          "service_name": {
+            "name": "Service Name"
+          },
+          "host": {
+            "name": "Router Host"
+          },
+          "action": {
+            "name": "Action"
+          }
+        }
       }
     }
   },

@@ -22,6 +22,7 @@ from .const import (
     CONF_QMODEM_SENSOR_TIMEOUT,
     CONF_STA_SENSOR_TIMEOUT,
     CONF_AP_SENSOR_TIMEOUT,
+    CONF_SERVICE_TIMEOUT,
     DOMAIN, 
     DEFAULT_DHCP_SOFTWARE, 
     DEFAULT_WIRELESS_SOFTWARE,
@@ -29,6 +30,7 @@ from .const import (
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
     DEFAULT_STA_SENSOR_TIMEOUT,
     DEFAULT_AP_SENSOR_TIMEOUT,
+    DEFAULT_SERVICE_TIMEOUT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -111,6 +113,10 @@ class SharedUbusDataManager:
             CONF_AP_SENSOR_TIMEOUT,
             entry.data.get(CONF_AP_SENSOR_TIMEOUT, DEFAULT_AP_SENSOR_TIMEOUT)
         )
+        service_timeout = entry.options.get(
+            CONF_SERVICE_TIMEOUT,
+            entry.data.get(CONF_SERVICE_TIMEOUT, DEFAULT_SERVICE_TIMEOUT)
+        )
         
         self._update_intervals: Dict[str, timedelta] = {
             "system_info": timedelta(seconds=system_timeout),
@@ -121,6 +127,7 @@ class SharedUbusDataManager:
             "hostapd_clients": timedelta(seconds=sta_timeout),
             "iwinfo_stations": timedelta(seconds=sta_timeout),
             "ap_info": timedelta(seconds=ap_timeout),
+            "service_status": timedelta(seconds=service_timeout),  # Use configured service timeout
         }
         self._update_locks: Dict[str, asyncio.Lock] = {
             key: asyncio.Lock() for key in self._update_intervals
@@ -154,6 +161,21 @@ class SharedUbusDataManager:
                 raise UpdateFailed(f"Failed to connect ubus client {client_type}: {exc}")
                 
         return self._ubus_clients[client_type]
+
+    def get_ubus_connection(self) -> ExtendedUbus:
+        """Get an existing ubus connection for external use."""
+        # Return the default client if available, otherwise create one
+        if "default" in self._ubus_clients:
+            return self._ubus_clients["default"]
+        
+        # If no client exists, we need to create one synchronously
+        # This is for cases where switch/button entities need immediate access
+        # Note: This should ideally be called after the data manager has been initialized
+        raise RuntimeError("No ubus client available. Data manager not initialized.")
+
+    async def get_ubus_connection_async(self) -> ExtendedUbus:
+        """Get or create a ubus connection asynchronously."""
+        return await self._get_ubus_client("default")
 
     async def _should_update(self, data_type: str) -> bool:
         """Check if data should be updated based on interval."""
@@ -214,6 +236,32 @@ class SharedUbusDataManager:
         except Exception as exc:
             _LOGGER.debug("Error fetching AP info: %s", exc)
             return {"ap_info": {}}
+
+    @ubus_auto_reconnect(max_retries=1)
+    async def _fetch_service_status(self) -> dict:
+        """Fetch service status using batch API."""
+        try:
+            ubus = await self.get_ubus_connection_async()
+            
+            # Get services with status in batch call to reduce API requests
+            services_data = await ubus.list_services(include_status=True)
+            
+            if not services_data:
+                _LOGGER.warning("Failed to fetch service status data")
+                return {}
+            
+            _LOGGER.debug("Fetched service status for %d services", len(services_data))
+            
+            # Log a sample of the service data for debugging
+            if services_data:
+                sample_service = next(iter(services_data.items()))
+                _LOGGER.debug("Sample service data: %s = %s", sample_service[0], sample_service[1])
+                
+            return services_data
+            
+        except Exception as exc:
+            _LOGGER.error("Error fetching service status: %s", exc)
+            raise UpdateFailed(f"Error communicating with OpenWrt: {exc}") from exc
 
     @ubus_auto_reconnect(max_retries=1)
     async def _fetch_device_statistics(self) -> Dict[str, Any]:
@@ -379,17 +427,17 @@ class SharedUbusDataManager:
             if await self._should_update("system_info"):
                 async with self._update_locks["system_info"]:
                     system_info = await system_client.system_info()
-                    self._data_cache["system_info"] = {"system_info": system_info}
+                    self._data_cache["system_info"] = system_info  # Store raw data
                     self._last_update["system_info"] = datetime.now()
-            combined_data.update(self._data_cache["system_info"])
+            combined_data["system_info"] = self._data_cache["system_info"]
         
         if "system_board" in system_types:
             if await self._should_update("system_board"):
                 async with self._update_locks["system_board"]:
                     board_info = await system_client.system_board()
-                    self._data_cache["system_board"] = {"system_board": board_info}
+                    self._data_cache["system_board"] = board_info  # Store raw data
                     self._last_update["system_board"] = datetime.now()
-            combined_data.update(self._data_cache["system_board"])
+            combined_data["system_board"] = self._data_cache["system_board"]
         
         return combined_data
 
@@ -397,7 +445,8 @@ class SharedUbusDataManager:
         """Get cached data or fetch if needed."""
         async with self._update_locks[data_type]:
             if not await self._should_update(data_type) and data_type in self._data_cache:
-                return self._data_cache[data_type]
+                # Return cached data in the expected format for coordinator
+                return {data_type: self._data_cache[data_type]}
 
             try:
                 if data_type == "system_info":
@@ -410,18 +459,29 @@ class SharedUbusDataManager:
                     data = await self._fetch_device_statistics()
                 elif data_type == "ap_info":
                     data = await self._fetch_ap_info()
+                elif data_type == "service_status":
+                    # This method returns raw data, so we need to wrap it
+                    raw_data = await self._fetch_service_status()
+                    data = {data_type: raw_data}
                 else:
                     raise ValueError(f"Unknown data type: {data_type}")
 
-                self._data_cache[data_type] = data
+                # Store the actual data (extract from wrapper if needed)
+                if data_type in data:
+                    self._data_cache[data_type] = data[data_type]
+                else:
+                    # For methods that already return wrapped data
+                    self._data_cache[data_type] = data
+                
                 self._last_update[data_type] = datetime.now()
+                # Return data in the expected format for coordinator
                 return data
             except Exception as exc:
                 _LOGGER.error("Error fetching data for %s: %s", data_type, exc)
                 # Return cached data if available
                 if data_type in self._data_cache:
                     _LOGGER.debug("Returning cached data for %s", data_type)
-                    return self._data_cache[data_type]
+                    return {data_type: self._data_cache[data_type]}
                 raise
 
     async def get_combined_data(self, data_types: list[str]) -> Dict[str, Any]:

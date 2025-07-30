@@ -19,7 +19,15 @@
           "enable_system_sensors": "启用系统传感器",
           "enable_qmodem_sensors": "启用调制解调器传感器",
           "enable_sta_sensors": "启用站点（WiFi设备）传感器",
-          "enable_ap_sensors": "启用接入点传感器"
+          "enable_ap_sensors": "启用接入点传感器",
+          "enable_service_controls": "启用服务控制"
+        }
+      },
+      "services": {
+        "title": "OpenWrt ubus - 服务选择",
+        "description": "选择要控制的 {host} 服务（发现 {services_count} 个服务）",
+        "data": {
+          "selected_services": "要控制的服务"
         }
       },
       "timeouts": {
@@ -29,14 +37,17 @@
           "system_sensor_timeout": "系统传感器更新间隔（秒）",
           "qmodem_sensor_timeout": "调制解调器传感器更新间隔（秒）",
           "sta_sensor_timeout": "站点传感器更新间隔（秒）",
-          "ap_sensor_timeout": "接入点传感器更新间隔（秒）"
+          "ap_sensor_timeout": "接入点传感器更新间隔（秒）",
+          "service_timeout": "服务状态更新间隔（秒）"
         }
       }
     },
     "error": {
       "cannot_connect": "连接失败",
       "invalid_auth": "身份验证无效",
-      "unknown": "未知错误"
+      "unknown": "未知错误",
+      "cannot_get_services": "获取服务列表失败",
+      "no_services_found": "路由器上未找到服务"
     },
     "abort": {
       "already_configured": "设备已配置"
@@ -54,6 +65,9 @@
           "enable_qmodem_sensors": "启用调制解调器传感器",
           "enable_sta_sensors": "启用站点（WiFi设备）传感器",
           "enable_ap_sensors": "启用接入点传感器",
+          "enable_service_controls": "启用服务控制",
+          "selected_services": "要控制的服务",
+          "refresh_services": "刷新服务列表",
           "system_sensor_timeout": "系统传感器更新间隔（秒）",
           "qmodem_sensor_timeout": "调制解调器传感器更新间隔（秒）",
           "sta_sensor_timeout": "站点传感器更新间隔（秒）",
@@ -80,6 +94,13 @@
           "qmodem_sensor_timeout": "调制解调器传感器更新间隔（秒）",
           "sta_sensor_timeout": "站点传感器更新间隔（秒）",
           "ap_sensor_timeout": "接入点传感器更新间隔（秒）"
+        }
+      },
+      "services": {
+        "title": "服务配置",
+        "description": "配置 {host} 的服务控制（发现 {services_count} 个服务）",
+        "data": {
+          "selected_services": "要控制的服务"
         }
       }
     }
@@ -250,6 +271,35 @@
       },
       "country": {
         "name": "国家"
+      }
+    },
+    "switch": {
+      "service": {
+        "name": "{service_name} 服务",
+        "state_attributes": {
+          "service_name": {
+            "name": "服务名称"
+          },
+          "host": {
+            "name": "路由器主机"
+          }
+        }
+      }
+    },
+    "button": {
+      "service_restart": {
+        "name": "重启 {service_name}",
+        "state_attributes": {
+          "service_name": {
+            "name": "服务名称"
+          },
+          "host": {
+            "name": "路由器主机"
+          },
+          "action": {
+            "name": "操作"
+          }
+        }
       }
     }
   },

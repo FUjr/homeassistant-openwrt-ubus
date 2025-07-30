@@ -205,7 +205,7 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
             name=device_name,
             model="Network Device",
             connections={("mac", self.mac_address)},
-            via_device=self.via_device
+            via_device=(DOMAIN, self.via_device)
         )
 
     @property
@@ -219,11 +219,11 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
         return "Unknown AP"
 
     @property
-    def via_device(self) -> tuple[str, str]:
+    def via_device(self) -> str:
         """Return the via device info for this device."""
         if self.ap_device != "Unknown AP":
-            return (DOMAIN, f"{self._host}_ap_{self.ap_device}")
-        return (DOMAIN, self._host)
+            return f"{self._host}_ap_{self.ap_device}"
+        return self._host
 
     def _get_device_name(self) -> str:
         """Get the device name from coordinator data or fallback to MAC."""
