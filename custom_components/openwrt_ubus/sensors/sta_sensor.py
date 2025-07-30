@@ -155,6 +155,12 @@ SENSOR_DESCRIPTIONS = [
         icon="mdi:download",
         entity_category=None,
     ),
+    SensorEntityDescription(
+        key="online",
+        name="Online",
+        icon="mdi:wifi",
+        entity_category=None,
+    ),
 ]
 
 
@@ -313,19 +319,19 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
         return (
             self.coordinator.last_update_success
             and self.coordinator.data is not None
-            and "device_statistics" in self.coordinator.data
-            and self.mac_address in self.coordinator.data["device_statistics"]
         )
 
     @property
-    def native_value(self) -> str | int | float | None:
+    def native_value(self) -> str | int | float | bool | None:
         """Return the state of the sensor."""
         if not self.coordinator.data or "device_statistics" not in self.coordinator.data:
-            return None
+            # Return default values when no data available
+            return self._get_default_value()
             
         device_stats = self.coordinator.data["device_statistics"]
         if self.mac_address not in device_stats:
-            return None
+            # Return default values when device not found
+            return self._get_default_value()
 
         device_data = device_stats[self.mac_address]
         key = self.entity_description.key
@@ -333,45 +339,51 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
 
         try:
             if key == "signal":
-                return device_data.get("signal")
+                value = device_data.get("signal")
+                return value if value is not None else 0
             if key == "signal_avg":
-                return device_data.get("signal_avg")
+                value = device_data.get("signal_avg")
+                return value if value is not None else 0
             if key == "noise":
-                return device_data.get("noise")
+                value = device_data.get("noise")
+                return value if value is not None else 0
             if key == "connected_time":
-                return device_data.get("connected_time")
+                value = device_data.get("connected_time")
+                return value if value is not None else 0
             if key == "rx_rate":
                 rx_data = device_data.get("rx", {})
                 rate_kbps = rx_data.get("rate")
                 # Convert kbps to Mbps
-                return round(rate_kbps / 1000, 2) if rate_kbps else None
+                return round(rate_kbps / 1000, 2) if rate_kbps else 0
             if key == "tx_rate":
                 tx_data = device_data.get("tx", {})
                 rate_kbps = tx_data.get("rate")
                 # Convert kbps to Mbps
-                return round(rate_kbps / 1000, 2) if rate_kbps else None
+                return round(rate_kbps / 1000, 2) if rate_kbps else 0
             if key == "rx_packets":
                 rx_data = device_data.get("rx", {})
-                return rx_data.get("packets")
+                value = rx_data.get("packets")
+                return value if value is not None else 0
             if key == "tx_packets":
                 tx_data = device_data.get("tx", {})
-                return tx_data.get("packets")
+                value = tx_data.get("packets")
+                return value if value is not None else 0
             if key == "rx_bytes":
                 rx_data = device_data.get("rx", {})
                 bytes_value = rx_data.get("bytes")
                 # Convert bytes to megabytes
-                return round(bytes_value / (1024 * 1024), 2) if bytes_value else None
+                return round(bytes_value / (1024 * 1024), 2) if bytes_value else 0
             if key == "tx_bytes":
                 tx_data = device_data.get("tx", {})
                 bytes_value = tx_data.get("bytes")
                 # Convert bytes to megabytes
-                return round(bytes_value / (1024 * 1024), 2) if bytes_value else None
+                return round(bytes_value / (1024 * 1024), 2) if bytes_value else 0
             if key == "rx_speed":
                 rx_data = device_data.get("rx", {})
                 current_rx_bytes = rx_data.get("bytes")
                 
                 if current_rx_bytes is None:
-                    return None
+                    return 0
                 
                 # Calculate speed based on previous data
                 if (self._previous_rx_bytes is not None and 
@@ -401,7 +413,7 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
                 current_tx_bytes = tx_data.get("bytes")
                 
                 if current_tx_bytes is None:
-                    return None
+                    return 0
                 
                 # Calculate speed based on previous data
                 if (self._previous_tx_bytes is not None and 
@@ -427,12 +439,36 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
                     self._previous_update_time = current_time
                 
                 return speed_mbps
+            
+            if key == "online":
+                # Device is online if it exists in device_statistics
+                return True
 
         except (KeyError, TypeError, ValueError) as exc:
             _LOGGER.debug("Error getting %s for %s: %s", key, self.mac_address, exc)
-            return None
+            return self._get_default_value()
 
-        return None
+        return self._get_default_value()
+
+    def _get_default_value(self) -> str | int | float | bool:
+        """Return default value based on entity description."""
+        # For string-based or non-numeric sensors, return "-"
+        # For numeric sensors, return 0
+        # For boolean sensors, return False
+        if self.entity_description.key in ["signal", "signal_avg", "noise"]:
+            # Signal strength values are typically numeric but could be unavailable
+            return 0
+        elif self.entity_description.key in ["connected_time", "rx_packets", "tx_packets", 
+                                           "rx_bytes", "tx_bytes", "rx_rate", "tx_rate",
+                                           "rx_speed", "tx_speed"]:
+            # These are all numeric values
+            return 0
+        elif self.entity_description.key == "online":
+            # Online status - False when offline/no data
+            return False
+        else:
+            # For any other unknown sensor types, default to "-"
+            return "-"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
