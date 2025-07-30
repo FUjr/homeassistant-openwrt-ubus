@@ -21,7 +21,8 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_USERNAME,
     UnitOfTime,
-    UnitOfInformation
+    UnitOfInformation,
+    UnitOfDataRate
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -78,22 +79,27 @@ SENSOR_DESCRIPTIONS = [
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_unit_of_measurement=UnitOfTime.HOURS,
         icon="mdi:clock-outline",
         entity_category=None,
     ),
     SensorEntityDescription(
         key="rx_rate",
         name="RX Rate",
+        device_class=SensorDeviceClass.DATA_RATE,
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="Mbps",
+        native_unit_of_measurement=UnitOfDataRate.KILOBITS_PER_SECOND,
+        suggested_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
         icon="mdi:download",
         entity_category=None,
     ),
     SensorEntityDescription(
         key="tx_rate",
         name="TX Rate",
+        device_class=SensorDeviceClass.DATA_RATE,
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="Mbps",
+        native_unit_of_measurement=UnitOfDataRate.KILOBITS_PER_SECOND,
+        suggested_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
         icon="mdi:upload",
         entity_category=None,
     ),
@@ -132,16 +138,20 @@ SENSOR_DESCRIPTIONS = [
     SensorEntityDescription(
         key="tx_speed",
         name="TX Speed",
+        device_class=SensorDeviceClass.DATA_RATE,
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="Mbps",
+        native_unit_of_measurement=UnitOfDataRate.KILOBITS_PER_SECOND,
+        suggested_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
         icon="mdi:upload",
         entity_category=None,
     ),
     SensorEntityDescription(
         key="rx_speed",
         name="RX Speed",
+        device_class=SensorDeviceClass.DATA_RATE,
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="Mbps",
+        native_unit_of_measurement=UnitOfDataRate.KILOBITS_PER_SECOND,
+        suggested_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
         icon="mdi:download",
         entity_category=None,
     ),

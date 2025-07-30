@@ -72,6 +72,8 @@ SENSOR_DESCRIPTIONS = [
         icon="mdi:flash",
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.MILLIVOLT,
+        suggested_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        suggested_display_precision=3,
         entity_category=None,
     ),
     SensorEntityDescription(

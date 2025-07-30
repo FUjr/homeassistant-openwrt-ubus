@@ -17,6 +17,7 @@ from homeassistant.const import (
     CONF_HOST,
     UnitOfElectricPotential,
     UnitOfFrequency,
+    UnitOfDataRate,
     PERCENTAGE,
 )
 from homeassistant.core import HomeAssistant
@@ -102,8 +103,10 @@ SENSOR_DESCRIPTIONS = [
     SensorEntityDescription(
         key="bitrate",
         name="Bitrate",
+        device_class=SensorDeviceClass.DATA_RATE,
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="kbps",
+        native_unit_of_measurement=UnitOfDataRate.KILOBITS_PER_SECOND,
+        suggested_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
         icon="mdi:speedometer",
         entity_category=None,
     ),
@@ -317,9 +320,7 @@ class ApSensor(CoordinatorEntity, SensorEntity):
             elif key == "channel":
                 return ap_data.get("channel")
             elif key == "frequency":
-                freq_hz = ap_data.get("frequency")
-                # Convert Hz to MHz
-                return round(freq_hz / 1_000_000, 1) if freq_hz else None
+                return ap_data.get("frequency")
             elif key == "txpower":
                 return ap_data.get("txpower")
             elif key == "quality":

@@ -50,6 +50,7 @@ SENSOR_DESCRIPTIONS = [
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_unit_of_measurement=UnitOfTime.HOURS,
         entity_category=None,  # Main sensor, not diagnostic
         icon="mdi:clock-outline",
     ),
