@@ -6,109 +6,139 @@ A custom Home Assistant integration that connects to OpenWrt routers via the ubu
 
 ## Features
 
-### Device Tracking
+### 📱 Device Tracking
 - **Wireless Device Detection**: Track connected wireless devices using iwinfo or hostapd
 - **DHCP Client Monitoring**: Monitor DHCP clients using dnsmasq or odhcpd
 - **Real-time Connection Status**: Get live updates on device connectivity
 
-### System Sensors
+![Device Tracker](imgs/sta_info_devicetracker.png)
+*Device tracker showing connected wireless devices*
+
+### 📊 System Sensors
 - **System Information**: Uptime, load averages, memory usage
 - **QModem Support**: Monitor 4G/LTE modem status and connection details
 - **Station Information**: Track wireless station associations and signal strength
 
-### Advanced Features
+![System Information](imgs/system_info_sensor.png)
+*System information sensors in Home Assistant*
+
+### 🔧 Advanced Features
 - **Configurable Polling**: Adjustable update intervals for different sensor types
 - **Multiple Software Support**: Compatible with various OpenWrt software configurations
 - **Device Registry Integration**: Proper device identification and management
 
-## Installation
+## 📥 Installation
 
 ### Method 1: Manual Installation
 
-1. Download or clone this repository
-2. Copy the `custom_components/openwrt_ubus` folder to your Home Assistant `custom_components` directory
-3. Restart Home Assistant
-4. Go to **Configuration** → **Integrations** → **Add Integration**
-5. Search for "OpenWrt ubus" and follow the setup wizard
+1. 📂 Download or clone this repository
+2. 📋 Copy the `custom_components/openwrt_ubus` folder to your Home Assistant `custom_components` directory
+3. 🔄 Restart Home Assistant
+4. ⚙️ Go to **Configuration** → **Integrations** → **Add Integration**
+5. 🔍 Search for "OpenWrt ubus" and follow the setup wizard
 
-### Method 2: HACS (Recommended)
+### Method 2: HACS (Recommended) 🌟
 
-*Note: This integration is not yet available in the default HACS repository*
+> **Note**: This integration is not yet available in the default HACS repository
 
-1. Add this repository as a custom repository in HACS
-2. Install the "OpenWrt ubus" integration
-3. Restart Home Assistant
-4. Add the integration through the UI
+1. ➕ Add this repository as a custom repository in HACS
+2. 📦 Install the "OpenWrt ubus" integration
+3. 🔄 Restart Home Assistant
+4. ⚙️ Add the integration through the UI
 
-## Configuration
+## ⚙️ Configuration
 
-### Prerequisites
+### Prerequisites ✅
 
 Your OpenWrt router must have:
-- `rpcd` service running (usually enabled by default)
-- `uhttpd` with ubus JSON-RPC support
-- Valid user credentials with appropriate permissions
+- 🔧 `rpcd` service running (usually enabled by default)
+- 🌐 `uhttpd` with ubus JSON-RPC support
+- 🔐 Valid user credentials with appropriate permissions
 
-### Integration Setup
+### Integration Setup 🛠️
 
 1. Navigate to **Settings** → **Devices & Services** → **Add Integration**
 2. Search for "OpenWrt ubus"
 3. Enter your router configuration:
-   - **Host**: IP address of your OpenWrt router
-   - **Username**: Login username (usually 'root')
-   - **Password**: Login password
-   - **Wireless Software**: Choose between 'iwinfo' (default) or 'hostapd'
-   - **DHCP Software**: Choose between 'dnsmasq' (default), 'odhcpd', or 'none'
+   - **🏠 Host**: IP address of your OpenWrt router
+   - **👤 Username**: Login username (usually 'root')
+   - **🔑 Password**: Login password
+   - **📡 Wireless Software**: Choose between 'iwinfo' (default) or 'hostapd'
+   - **🌐 DHCP Software**: Choose between 'dnsmasq' (default), 'odhcpd', or 'none'
 
-### Configuration Options
+### Configuration Options 📋
 
 | Option | Description | Default | Options |
 |--------|-------------|---------|---------|
-| Host | Router IP address | - | Any valid IP |
-| Username | Login username | - | Usually 'root' |
-| Password | Login password | - | Router password |
-| Wireless Software | Wireless monitoring method | iwinfo | iwinfo, hostapd |
-| DHCP Software | DHCP client detection method | dnsmasq | dnsmasq, odhcpd, none |
+| 🏠 Host | Router IP address | - | Any valid IP |
+| 👤 Username | Login username | - | Usually 'root' |
+| 🔑 Password | Login password | - | Router password |
+| 📡 Wireless Software | Wireless monitoring method | iwinfo | iwinfo, hostapd |
+| 🌐 DHCP Software | DHCP client detection method | dnsmasq | dnsmasq, odhcpd, none |
 
-## Entities
+## 📋 Entities
 
 ### Device Tracker
 - **Wireless Devices**: All connected wireless clients
 - **DHCP Clients**: All DHCP-assigned devices (if DHCP monitoring enabled)
 
+![Connected Devices](imgs/system_info_connected_devices.png)
+*Overview of connected devices in Home Assistant*
+
 ### Sensors
 
-#### System Information
+#### 🖥️ System Information
 - `sensor.openwrt_uptime` - System uptime
 - `sensor.openwrt_load_1` - 1-minute load average
 - `sensor.openwrt_load_5` - 5-minute load average  
 - `sensor.openwrt_load_15` - 15-minute load average
 - `sensor.openwrt_memory_*` - Various memory statistics
 
-#### QModem (4G/LTE Modem)
+#### 📡 QModem (4G/LTE Modem)
 - `sensor.openwrt_qmodem_*` - Modem status, signal strength, connection details
 
-#### Wireless Stations
+![QModem Information](imgs/qmodem_info.png)
+*QModem sensor showing LTE modem status and signal information*
+
+#### 📶 Wireless Stations
 - `sensor.openwrt_sta_*` - Station signal strength and connection information
 
-## Troubleshooting
+![Station Information](imgs/sta_info_sensor.png)
+*Wireless station sensors showing signal strength and connection details*
 
-### Common Issues
+#### 🌐 Access Point Information
+The integration provides detailed information about both AP client mode and master mode:
 
-**Cannot Connect to Router**
-- Verify the router IP address and credentials
-- Ensure `rpcd` and `uhttpd` services are running on OpenWrt
-- Check firewall settings allow HTTP access to ubus
+![AP Client Mode](imgs/ap_info_client.png)
+*Access Point in client mode - showing connection to upstream AP*
 
-**No Devices Detected**
-- Verify wireless and DHCP software settings match your OpenWrt configuration
-- Check that the selected monitoring methods are properly configured on the router
+![AP Master Mode](imgs/ap_info_master.png)
+*Access Point in master mode - showing hosted network information*
 
-**Sensors Not Updating**
-- Check Home Assistant logs for connection errors
-- Verify router permissions allow access to system information
+## 🔧 Troubleshooting
 
-### Debug Logging
+### Common Issues ⚠️
+
+**🚫 Cannot Connect to Router**
+- ✅ Verify the router IP address and credentials
+- ✅ Ensure `rpcd` and `uhttpd` services are running on OpenWrt
+- ✅ Check firewall settings allow HTTP access to ubus
+
+**❌ No Devices Detected**
+- ✅ Verify wireless and DHCP software settings match your OpenWrt configuration
+- ✅ Check that the selected monitoring methods are properly configured on the router
+
+**⏰ Sensors Not Updating**
+- ✅ Check Home Assistant logs for connection errors
+- ✅ Verify router permissions allow access to system information
+
+**🏷️ Devices Show MAC Addresses Instead of Hostnames**
+- ✅ Ensure hostname resolution ACL is properly configured (see [Hostname Resolution Configuration](#hostname-resolution-configuration-🏷️))
+- ✅ Verify DHCP lease files are accessible: `/var/dhcp.leases` or `/tmp/dhcp.leases`
+- ✅ Check that the rpcd service has been restarted after ACL configuration
+- ✅ Confirm the user account is assigned to the correct ACL group
+
+### Debug Logging 🐛
 
 Add to your `configuration.yaml`:
 
@@ -119,16 +149,16 @@ logger:
     homeassistant.components.device_tracker: debug
 ```
 
-## OpenWrt Router Configuration
+## 🔧 OpenWrt Router Configuration
 
-### Required Packages
+### Required Packages 📦
 Ensure these packages are installed on your OpenWrt router:
 
 ```bash
 opkg install rpcd uhttpd-mod-ubus
 ```
 
-### Service Configuration
+### Service Configuration ⚙️
 Make sure required services are running:
 
 ```bash
@@ -138,12 +168,52 @@ service uhttpd start
 service uhttpd enable
 ```
 
-### Permissions
+### Permissions 🔐
 The user account needs appropriate permissions to access ubus methods. For the root user, this is typically not an issue.
 
-## Development
+### Hostname Resolution Configuration 🏷️
 
-### Project Structure
+> **Important**: If you need hostname resolution for connected devices, additional ACL configuration is required.
+
+To enable hostname resolution, you need to configure rpcd ACL (Access Control List) to allow reading system files. This is necessary for the integration to read hostname information from DHCP lease files and system configuration.
+
+#### Step 1: Create ACL Configuration File
+Create a new ACL file for the Home Assistant integration:
+
+```bash
+# SSH into your OpenWrt router
+ssh root@your_router_ip
+
+# Create the ACL configuration directory if it doesn't exist
+mkdir -p /usr/share/rpcd/acl.d
+
+# Create the ACL configuration file
+cat > /usr/share/rpcd/acl.d/hass.json << 'EOF'
+{
+  "hass": {
+    "description": "Access role for OpenWrt ubus integration",
+    "read": {
+      "file": {
+        "/tmp/*": [ "read" ]
+      }
+    }
+  }
+}
+EOF
+```
+
+#### Step 2: Restart Services
+Restart the required services to apply changes:
+
+```bash
+/etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
+```
+
+> **Note**: Without proper ACL configuration, device names may appear as MAC addresses instead of hostnames in Home Assistant.
+
+## 👨‍💻 Development
+
+### Project Structure 📁
 ```
 custom_components/openwrt_ubus/
 ├── __init__.py              # Main integration setup
@@ -168,24 +238,24 @@ custom_components/openwrt_ubus/
     └── zh.json
 ```
 
-### Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+### Contributing 🤝
+1. 🍴 Fork the repository
+2. 🌿 Create a feature branch
+3. ✏️ Make your changes
+4. 🧪 Test thoroughly
+5. 📤 Submit a pull request
 
-## License
+## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the Mozilla Public License 2.0 (MPL-2.0) - see the LICENSE file for details.
 
-## Support
+## 🆘 Support
 
-- **GitHub Issues**: [Report bugs or request features](https://github.com/fujr/homeassistant-openwrt-ubus/issues)
-- **Home Assistant Community**: [Discuss on the forum](https://community.home-assistant.io/)
+- **🐛 GitHub Issues**: [Report bugs or request features](https://github.com/fujr/homeassistant-openwrt-ubus/issues)
+- **💬 Home Assistant Community**: [Discuss on the forum](https://community.home-assistant.io/)
 
-## Acknowledgments
+## 🙏 Acknowledgments
 
-- OpenWrt project for the excellent router firmware
-- Home Assistant community for integration development resources
-- Contributors and testers who help improve this integration
+- 🔧 OpenWrt project for the excellent router firmware
+- 🏠 Home Assistant community for integration development resources
+- 👥 Contributors and testers who help improve this integration
