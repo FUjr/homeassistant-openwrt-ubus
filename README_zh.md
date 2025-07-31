@@ -24,6 +24,7 @@
 
 ### 🔧 高级功能
 - **服务控制**：启动、停止、启用和禁用 OpenWrt 系统服务
+- **设备管理**：通过 hostapd 集成踢出连接到无线网络的设备
 - **批量 API 优化**：使用批量 API 调用进行高效数据检索
 - **可配置轮询**：为不同传感器类型调整更新间隔
 - **多软件支持**：兼容各种 OpenWrt 软件配置
@@ -80,6 +81,7 @@
 | ⏱️ 系统传感器超时 | 系统数据获取超时 | 30秒 | 5-300秒 |
 | 📊 QModem 传感器超时 | QModem 数据获取超时 | 30秒 | 5-300秒 |
 | ⚙️ 服务超时 | 服务控制超时 | 30秒 | 5-300秒 |
+| 🚫 设备踢出按钮 | 启用设备踢出功能 | 禁用 | 启用/禁用 |
 
 ## 📋 实体
 
@@ -90,6 +92,9 @@
 ### 服务控制
 - **🔄 开关实体**：控制 OpenWrt 系统服务（启动/停止）
 - **⚡ 按钮实体**：服务管理的快速操作（启动、停止、启用、禁用、重启）
+
+### 设备管理
+- **🚫 踢出按钮**：强制断开连接到接入点的无线设备（需要 hostapd）
 
 ![已连接设备](imgs/system_info_connected_devices.png)
 *Home Assistant 中已连接设备和服务控制的概览*
@@ -155,6 +160,82 @@
 - 🛡️ 用户友好的错误处理消息
 - 📊 性能优化的批量 API
 
+### 🚫 设备踢出按钮
+集成提供了设备管理功能，通过踢出按钮允许您从无线网络断开设备连接：
+
+#### 功能特性
+- **🔌 设备断开连接**：强制断开连接到 AP 的无线设备
+- **⏱️ 临时封禁**：踢出设备后自动封禁 60 秒
+- **🔄 实时更新**：按钮可用性根据设备连接状态实时更新
+- **🎯 Hostapd 集成**：使用 hostapd 接口进行可靠的设备管理
+- **📍 AP 特定控制**：为不同接入点上的设备提供独立按钮
+
+#### 工作原理
+1. **🔍 自动检测**：集成自动检测连接的无线设备
+2. **🆔 按钮创建**：为每个连接的设备动态创建踢出按钮
+3. **✅ 可用性检查**：按钮仅在以下情况下可用：
+   - Hostapd 服务正在运行且可通过 ubus 访问
+   - 目标设备当前连接到无线网络
+   - 设备连接到正确的接入点
+4. **⚡ 踢出操作**：按下时，发送解除认证命令断开设备连接
+5. **🔄 状态更新**：踢出操作后自动刷新设备状态
+
+#### 要求
+- **📡 hostapd**：必须在 OpenWrt 路由器上安装并运行
+- **🌐 Ubus 接口**：hostapd 必须可通过 ubus 访问 (hostapd.*)
+- **🔐 权限**：用户账户需要访问 hostapd ubus 方法的权限
+
+#### 按钮实体详情
+- **🏷️ 实体名称**：`button.kick_[设备名称]` 或 `button.kick_[mac地址]`
+- **📊 属性**：
+  - `device_mac`：目标设备的 MAC 地址
+  - `device_name`：设备的主机名（如果可用）
+  - `ap_device`：接入点接口（例如 `phy0-ap0`）
+  - `hostapd_interface`：完整的 hostapd 接口名称（例如 `hostapd.phy0-ap0`）
+- **🔴 可用性**：在以下情况下自动变为不可用：
+  - 设备从网络断开连接
+  - Hostapd 服务变为不可用
+  - 设备移动到不同的接入点
+
+#### 配置
+设备踢出按钮默认禁用，可在集成选项中启用：
+
+1. 转到 **设置** → **设备与服务** → **OpenWrt ubus**
+2. 点击集成上的 **配置**
+3. 启用 **设备踢出按钮**
+4. 保存配置
+
+#### 依赖模块
+踢出设备功能依赖于几个集成模块：
+
+**核心依赖**：
+- `extended_ubus.py`：提供 `check_hostapd_available()` 和 `kick_device()` 方法
+- `shared_data_manager.py`：管理 hostapd 可用性状态的缓存（30分钟缓存）
+- `buttons/device_kick_button.py`：实现踢出按钮实体
+
+**数据要求**：
+- `hostapd_available`：hostapd 服务可用性的缓存检查
+- `device_statistics`：实时设备连接信息
+- `ap_info`：接入点配置和状态
+
+**使用的 API 调用**：
+- `ubus list "*"`：检查可用的 hostapd 接口
+- `ubus call hostapd.[接口] del_client`：从 AP 踢出设备
+
+#### 技术实现
+```bash
+# 踢出设备时执行的示例 ubus 命令：
+ubus call hostapd.phy0-ap0 del_client '{"addr":"aa:bb:cc:dd:ee:ff","deauth":true,"reason":5,"ban_time":60000}'
+```
+
+集成自动：
+- 🔍 通过 `ubus list` 发现可用的 hostapd 接口
+- 📋 缓存 hostapd 可用性 30 分钟（可配置）
+- 🎯 为连接的设备创建设备特定的踢出按钮
+- ⚡ 实时更新按钮可用性
+- 🚫 执行 60 秒封禁时间的解除认证
+- 🔄 踢出操作后刷新设备状态
+
 ## 🔧 故障排除
 
 ### 常见问题 ⚠️
@@ -195,7 +276,11 @@ logger:
 确保您的 OpenWrt 路由器上安装了这些软件包：
 
 ```bash
+# 基础软件包（必需）
 opkg install rpcd uhttpd-mod-ubus
+
+# 增强功能的可选软件包
+opkg install hostapd    # 设备踢出功能所需
 ```
 
 ### 服务配置 ⚙️
@@ -262,8 +347,8 @@ custom_components/openwrt_ubus/
 ├── device_tracker.py        # 设备跟踪平台
 ├── sensor.py               # 传感器平台协调器
 ├── switch.py               # 服务控制开关
-├── button.py               # 服务控制按钮
-├── extended_ubus.py        # 增强的 ubus 客户端与批量 API
+├── button.py               # 服务控制按钮和设备踢出协调
+├── extended_ubus.py        # 增强的 ubus 客户端与批量 API 和 hostapd 支持
 ├── shared_data_manager.py  # 共享数据管理和优化
 ├── manifest.json           # 集成清单
 ├── strings.json            # UI 字符串
@@ -272,6 +357,10 @@ custom_components/openwrt_ubus/
 │   ├── __init__.py
 │   ├── const.py
 │   └── interface.py
+├── buttons/                # 按钮实体模块
+│   ├── __init__.py
+│   ├── service_button.py   # 服务控制按钮
+│   └── device_kick_button.py # 设备踢出功能
 ├── sensors/                # 各个传感器模块
 │   ├── __init__.py
 │   ├── system_sensor.py    # 系统信息传感器

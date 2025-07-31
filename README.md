@@ -24,6 +24,7 @@ A custom Home Assistant integration that connects to OpenWrt routers via the ubu
 
 ### 🔧 Advanced Features
 - **Service Control**: Start, stop, enable, and disable OpenWrt system services
+- **Device Management**: Kick connected devices from wireless network with hostapd integration
 - **Batch API Optimization**: Efficient data retrieval using batch API calls
 - **Configurable Polling**: Adjustable update intervals for different sensor types
 - **Multiple Software Support**: Compatible with various OpenWrt software configurations
@@ -80,6 +81,7 @@ Your OpenWrt router must have:
 | ⏱️ System Sensor Timeout | System data fetch timeout | 30s | 5s-300s |
 | 📊 QModem Sensor Timeout | QModem data fetch timeout | 30s | 5s-300s |
 | ⚙️ Service Timeout | Service control timeout | 30s | 5s-300s |
+| 🚫 Device Kick Buttons | Enable device kick functionality | Disabled | Enabled/Disabled |
 
 ## 📋 Entities
 
@@ -90,6 +92,9 @@ Your OpenWrt router must have:
 ### Service Control
 - **🔄 Switch Entities**: Control OpenWrt system services (start/stop)
 - **⚡ Button Entities**: Quick actions for service management (start, stop, enable, disable, restart)
+
+### Device Management
+- **🚫 Kick Buttons**: Force disconnect connected wireless devices from access points (requires hostapd)
 
 ![Connected Devices](imgs/system_info_connected_devices.png)
 *Overview of connected devices and service controls in Home Assistant*
@@ -155,6 +160,82 @@ The integration provides comprehensive service control capabilities:
 - 🛡️ Error handling with user-friendly messages
 - 📊 Batch API optimization for performance
 
+### 🚫 Device Kick Buttons
+The integration provides device management capabilities through kick buttons that allow you to disconnect devices from your wireless network:
+
+#### Features
+- **🔌 Device Disconnection**: Force disconnect connected wireless devices from AP
+- **⏱️ Temporary Ban**: Automatically bans devices for 60 seconds after kicking
+- **🔄 Real-time Updates**: Button availability updates based on device connection status
+- **🎯 Hostapd Integration**: Uses hostapd interface for reliable device management
+- **📍 AP-Specific Control**: Separate buttons for devices on different access points
+
+#### How It Works
+1. **🔍 Automatic Detection**: Integration automatically detects connected wireless devices
+2. **🆔 Button Creation**: Creates kick buttons for each connected device dynamically
+3. **✅ Availability Check**: Buttons are only available when:
+   - Hostapd service is running and accessible via ubus
+   - Target device is currently connected to the wireless network
+   - Device is connected to the correct access point
+4. **⚡ Kick Action**: When pressed, sends deauthentication command to disconnect device
+5. **🔄 Status Update**: Automatically refreshes device status after kick operation
+
+#### Requirements
+- **📡 hostapd**: Must be installed and running on OpenWrt router
+- **🌐 Ubus Interface**: hostapd must be accessible via ubus (hostapd.*)
+- **🔐 Permissions**: User account needs permission to access hostapd ubus methods
+
+#### Button Entity Details
+- **🏷️ Entity Name**: `button.kick_[device_name]` or `button.kick_[mac_address]`
+- **📊 Attributes**: 
+  - `device_mac`: MAC address of the target device
+  - `device_name`: Hostname of the device (if available)
+  - `ap_device`: Access point interface (e.g., `phy0-ap0`)
+  - `hostapd_interface`: Full hostapd interface name (e.g., `hostapd.phy0-ap0`)
+- **🔴 Availability**: Automatically becomes unavailable when:
+  - Device disconnects from the network
+  - Hostapd service becomes unavailable
+  - Device moves to a different access point
+
+#### Configuration
+Device kick buttons are disabled by default and can be enabled in the integration options:
+
+1. Go to **Settings** → **Devices & Services** → **OpenWrt ubus**
+2. Click **Configure** on the integration
+3. Enable **Device Kick Buttons**
+4. Save configuration
+
+#### Dependencies
+The kick device functionality depends on several integration modules:
+
+**Core Dependencies**:
+- `extended_ubus.py`: Provides `check_hostapd_available()` and `kick_device()` methods
+- `shared_data_manager.py`: Manages caching of hostapd availability status (30-minute cache)
+- `buttons/device_kick_button.py`: Implements the kick button entities
+
+**Data Requirements**:
+- `hostapd_available`: Cached check of hostapd service availability
+- `device_statistics`: Real-time device connection information
+- `ap_info`: Access point configuration and status
+
+**API Calls Used**:
+- `ubus list "*"`: Check for available hostapd interfaces
+- `ubus call hostapd.[interface] del_client`: Kick device from AP
+
+#### Technical Implementation
+```bash
+# Example ubus command executed when kicking a device:
+ubus call hostapd.phy0-ap0 del_client '{"addr":"aa:bb:cc:dd:ee:ff","deauth":true,"reason":5,"ban_time":60000}'
+```
+
+The integration automatically:
+- 🔍 Discovers available hostapd interfaces via `ubus list`
+- 📋 Caches hostapd availability for 30 minutes (configurable)
+- 🎯 Creates device-specific kick buttons for connected devices
+- ⚡ Updates button availability in real-time
+- 🚫 Executes deauthentication with 60-second ban time
+- 🔄 Refreshes device status after kick operations
+
 ## 🔧 Troubleshooting
 
 ### Common Issues ⚠️
@@ -195,7 +276,11 @@ logger:
 Ensure these packages are installed on your OpenWrt router:
 
 ```bash
+# Basic packages (required)
 opkg install rpcd uhttpd-mod-ubus
+
+# Optional packages for enhanced functionality
+opkg install hostapd    # Required for device kick functionality
 ```
 
 ### Service Configuration ⚙️
@@ -262,8 +347,8 @@ custom_components/openwrt_ubus/
 ├── device_tracker.py        # Device tracking platform
 ├── sensor.py               # Sensor platform coordinator
 ├── switch.py               # Service control switches
-├── button.py               # Service control buttons
-├── extended_ubus.py        # Enhanced ubus client with batch API
+├── button.py               # Service control buttons and device kick coordination
+├── extended_ubus.py        # Enhanced ubus client with batch API and hostapd support
 ├── shared_data_manager.py  # Shared data management and optimization
 ├── manifest.json           # Integration manifest
 ├── strings.json            # UI strings
@@ -272,6 +357,10 @@ custom_components/openwrt_ubus/
 │   ├── __init__.py
 │   ├── const.py
 │   └── interface.py
+├── buttons/                # Button entity modules
+│   ├── __init__.py
+│   ├── service_button.py   # Service control buttons
+│   └── device_kick_button.py # Device kick functionality
 ├── sensors/                # Individual sensor modules
 │   ├── __init__.py
 │   ├── system_sensor.py    # System information sensors
