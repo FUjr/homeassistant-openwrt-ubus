@@ -20,7 +20,8 @@
           "enable_qmodem_sensors": "Enable QModem Sensors",
           "enable_sta_sensors": "Enable Station (WiFi Device) Sensors",
           "enable_ap_sensors": "Enable Access Point Sensors",
-          "enable_service_controls": "Enable Service Controls"
+          "enable_service_controls": "Enable Service Controls",
+          "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)"
         }
       },
       "services": {
@@ -249,6 +250,29 @@
           },
           "action": {
             "name": "Action"
+          }
+        }
+      },
+      "device_kick": {
+        "name": "Kick {device_name}",
+        "state_attributes": {
+          "mac_address": {
+            "name": "MAC Address"
+          },
+          "ap_device": {
+            "name": "Access Point"
+          },
+          "hostname": {
+            "name": "Hostname"
+          },
+          "signal": {
+            "name": "Signal Strength"
+          },
+          "connected_time": {
+            "name": "Connected Time"
+          },
+          "authorized": {
+            "name": "Authorized"
           }
         }
       }

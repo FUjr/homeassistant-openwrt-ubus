@@ -7,7 +7,7 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow, ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
@@ -22,6 +22,7 @@ from .const import (
     CONF_ENABLE_SYSTEM_SENSORS,
     CONF_ENABLE_AP_SENSORS,
     CONF_ENABLE_SERVICE_CONTROLS,
+    CONF_ENABLE_DEVICE_KICK_BUTTONS,
     CONF_SELECTED_SERVICES,
     CONF_SYSTEM_SENSOR_TIMEOUT,
     CONF_QMODEM_SENSOR_TIMEOUT,
@@ -35,6 +36,7 @@ from .const import (
     DEFAULT_ENABLE_SYSTEM_SENSORS,
     DEFAULT_ENABLE_AP_SENSORS,
     DEFAULT_ENABLE_SERVICE_CONTROLS,
+    DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
     DEFAULT_SELECTED_SERVICES,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
@@ -75,6 +77,7 @@ STEP_SENSORS_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_ENABLE_STA_SENSORS, default=DEFAULT_ENABLE_STA_SENSORS): bool,
         vol.Optional(CONF_ENABLE_AP_SENSORS, default=DEFAULT_ENABLE_AP_SENSORS): bool,
         vol.Optional(CONF_ENABLE_SERVICE_CONTROLS, default=DEFAULT_ENABLE_SERVICE_CONTROLS): bool,
+        vol.Optional(CONF_ENABLE_DEVICE_KICK_BUTTONS, default=DEFAULT_ENABLE_DEVICE_KICK_BUTTONS): bool,
     }
 )
 
@@ -289,9 +292,9 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
 class OpenwrtUbusOptionsFlow(OptionsFlow):
     """Handle options flow for OpenWrt ubus."""
 
-    def __init__(self, config_entry) -> None:
+    def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        super().__init__()
         self._available_services: list[str] = []
 
     async def async_step_init(
@@ -348,6 +351,10 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                 vol.Optional(
                     CONF_ENABLE_SERVICE_CONTROLS,
                     default=current_data.get(CONF_ENABLE_SERVICE_CONTROLS, DEFAULT_ENABLE_SERVICE_CONTROLS)
+                ): bool,
+                vol.Optional(
+                    CONF_ENABLE_DEVICE_KICK_BUTTONS,
+                    default=current_data.get(CONF_ENABLE_DEVICE_KICK_BUTTONS, DEFAULT_ENABLE_DEVICE_KICK_BUTTONS)
                 ): bool,
                 vol.Optional(
                     CONF_SYSTEM_SENSOR_TIMEOUT,

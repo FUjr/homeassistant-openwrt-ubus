@@ -128,6 +128,7 @@ class SharedUbusDataManager:
             "iwinfo_stations": timedelta(seconds=sta_timeout),
             "ap_info": timedelta(seconds=ap_timeout),
             "service_status": timedelta(seconds=service_timeout),  # Use configured service timeout
+            "hostapd_available": timedelta(minutes=30),  # Very long cache - hostapd availability rarely changes
         }
         self._update_locks: Dict[str, asyncio.Lock] = {
             key: asyncio.Lock() for key in self._update_intervals
@@ -218,6 +219,18 @@ class SharedUbusDataManager:
         except Exception as exc:
             _LOGGER.debug("Error fetching QModem info: %s", exc)
             return {"qmodem_info": None}
+
+    @ubus_auto_reconnect(max_retries=1)
+    async def _fetch_hostapd_available(self) -> Dict[str, Any]:
+        """Check if hostapd is available via ubus list."""
+        client = await self._get_ubus_client()
+        try:
+            hostapd_available = await client.check_hostapd_available()
+            _LOGGER.debug("Hostapd availability check: %s", hostapd_available)
+            return {"hostapd_available": hostapd_available}
+        except Exception as exc:
+            _LOGGER.debug("Error checking hostapd availability: %s", exc)
+            return {"hostapd_available": False}
 
     @ubus_auto_reconnect(max_retries=1)
     async def _fetch_ap_info(self) -> Dict[str, Any]:
@@ -455,6 +468,8 @@ class SharedUbusDataManager:
                     data = await self._fetch_system_board()
                 elif data_type == "qmodem_info":
                     data = await self._fetch_qmodem_info()
+                elif data_type == "hostapd_available":
+                    data = await self._fetch_hostapd_available()
                 elif data_type == "device_statistics":
                     data = await self._fetch_device_statistics()
                 elif data_type == "ap_info":

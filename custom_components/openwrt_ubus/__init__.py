@@ -113,8 +113,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as exc:
         raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {entry.data[CONF_HOST]}: {exc}") from exc
 
-    # Store the config entry data
-    hass.data[DOMAIN][entry.entry_id] = entry.data
+    # Store the config entry data as a mutable dict
+    hass.data[DOMAIN][f"entry_data_{entry.entry_id}"] = dict(entry.data)
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -256,7 +256,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.data[DOMAIN]["coordinators"] = []
         
         # Clean up entry-specific data
-        hass.data[DOMAIN].pop(entry.entry_id, None)
+        hass.data[DOMAIN].pop(f"entry_data_{entry.entry_id}", None)
+        
+        # Clean up device kick coordinators
+        if "device_kick_coordinators" in hass.data[DOMAIN]:
+            hass.data[DOMAIN]["device_kick_coordinators"].pop(entry.entry_id, None)
         
         # Clean up modem_ctrl availability data if no more entries
         if len([e for e in hass.config_entries.async_entries(DOMAIN) if e.entry_id != entry.entry_id]) == 0:

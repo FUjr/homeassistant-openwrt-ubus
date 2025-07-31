@@ -20,7 +20,8 @@
           "enable_qmodem_sensors": "启用调制解调器传感器",
           "enable_sta_sensors": "启用站点（WiFi设备）传感器",
           "enable_ap_sensors": "启用接入点传感器",
-          "enable_service_controls": "启用服务控制"
+          "enable_service_controls": "启用服务控制",
+          "enable_device_kick_buttons": "启用设备踢出按钮（需要hostapd）"
         }
       },
       "services": {
@@ -298,6 +299,29 @@
           },
           "action": {
             "name": "操作"
+          }
+        }
+      },
+      "device_kick": {
+        "name": "踢出 {device_name}",
+        "state_attributes": {
+          "mac_address": {
+            "name": "MAC地址"
+          },
+          "ap_device": {
+            "name": "接入点"
+          },
+          "hostname": {
+            "name": "主机名"
+          },
+          "signal": {
+            "name": "信号强度"
+          },
+          "connected_time": {
+            "name": "连接时间"
+          },
+          "authorized": {
+            "name": "已授权"
           }
         }
       }

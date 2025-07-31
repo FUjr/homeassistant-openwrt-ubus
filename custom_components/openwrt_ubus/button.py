@@ -1,26 +1,39 @@
-"""Support for OpenWrt service restart via ubus."""
+"""Support for OpenWrt buttons via ubus."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
-from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
-    CONF_SELECTED_SERVICES,
-    CONF_ENABLE_SERVICE_CONTROLS,
     DOMAIN,
-    API_SUBSYS_RC,
-    API_METHOD_INIT,
+    CONF_ENABLE_SERVICE_CONTROLS,
+    CONF_ENABLE_DEVICE_KICK_BUTTONS,
+    DEFAULT_ENABLE_SERVICE_CONTROLS,
+    DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
 )
+from .buttons import service_button, device_kick_button
 
 _LOGGER = logging.getLogger(__name__)
+
+# Button modules configuration
+BUTTON_MODULES = [
+    {
+        "module": service_button,
+        "config_key": CONF_ENABLE_SERVICE_CONTROLS,
+        "default": DEFAULT_ENABLE_SERVICE_CONTROLS,
+        "name": "service_button"
+    },
+    {
+        "module": device_kick_button,
+        "config_key": CONF_ENABLE_DEVICE_KICK_BUTTONS,
+        "default": DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
+        "name": "device_kick_button"
+    },
+]
 
 
 async def async_setup_entry(
@@ -28,80 +41,56 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up button entities from a config entry."""
+    """Set up OpenWrt buttons from a config entry."""
+    _LOGGER.info("Setting up OpenWrt buttons")
     
-    # Check if service controls are enabled
-    if not entry.data.get(CONF_ENABLE_SERVICE_CONTROLS, False):
-        _LOGGER.debug("Service controls disabled, skipping button setup")
-        return
+    coordinators = []
     
-    # Get selected services
-    selected_services = entry.data.get(CONF_SELECTED_SERVICES, [])
-    if not selected_services:
-        _LOGGER.debug("No services selected, skipping button setup")
-        return
-    
-    # Get shared data manager
-    data_manager_key = f"data_manager_{entry.entry_id}"
-    data_manager = hass.data[DOMAIN][data_manager_key]
-    
-    # Create button entities for each selected service
-    entities = []
-    for service_name in selected_services:
-        entities.append(OpenwrtServiceRestartButton(data_manager, service_name, entry))
-        _LOGGER.debug("Created restart button entity for service: %s", service_name)
-    
-    if entities:
-        async_add_entities(entities, True)
-        _LOGGER.info("Created %d service restart button entities", len(entities))
-
-
-class OpenwrtServiceRestartButton(ButtonEntity):
-    """Representation of an OpenWrt service restart button."""
-
-    def __init__(self, data_manager, service_name: str, entry: ConfigEntry) -> None:
-        """Initialize the button."""
-        self.data_manager = data_manager
-        self.service_name = service_name
-        self.entry = entry
-        self._host = entry.data[CONF_HOST]
-        self._attr_unique_id = f"{self._host}_restart_{service_name}"
-        self._attr_name = f"Restart {service_name}"
-        self._attr_entity_registry_enabled_default = True
-        self._attr_icon = "mdi:restart"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._host)},
-            name=f"OpenWrt Router ({self._host})",
-            manufacturer="OpenWrt",
-            model="Router",
+    # Setup each button module based on configuration
+    for button_config in BUTTON_MODULES:
+        module = button_config["module"]
+        config_key = button_config["config_key"]
+        default_enabled = button_config["default"]
+        module_name = button_config["name"]
+        
+        # Check if this button type is enabled
+        # Priority: options > data > default
+        enabled = entry.options.get(
+            config_key, 
+            entry.data.get(config_key, default_enabled)
         )
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the state attributes."""
-        return {
-            "service_name": self.service_name,
-            "host": self._host,
-            "action": "restart",
-        }
-
-    async def async_press(self) -> None:
-        """Handle the button press."""
+        
+        if not enabled:
+            _LOGGER.info("Button module %s is disabled in configuration", module_name)
+            continue
+        
         try:
-            ubus = await self.data_manager.get_ubus_connection_async()
-            
-            # Restart the service
-            await ubus.service_action(self.service_name, "restart")
-            
-            _LOGGER.info("Restarted service: %s", self.service_name)
-            
-            # Invalidate service status cache to force refresh
-            self.data_manager.invalidate_cache("service_status")
-            
+            # Check if module has async_setup_entry function
+            if hasattr(module, 'async_setup_entry'):
+                _LOGGER.debug("Loading button module: %s", module_name)
+                
+                # For device_kick_button, we need to pass the add_entities callback
+                if module_name == "device_kick_button":
+                    await module.async_setup_entry(hass, entry, async_add_entities)
+                else:
+                    # Call the module's setup function
+                    coordinator = await module.async_setup_entry(hass, entry, async_add_entities)
+                    
+                    if coordinator:
+                        coordinators.append(coordinator)
+                        _LOGGER.info("Successfully loaded button module: %s", module_name)
+                    else:
+                        _LOGGER.debug("Button module %s returned no coordinator", module_name)
+            else:
+                _LOGGER.warning("Button module %s has no async_setup_entry function", module_name)
+                
         except Exception as exc:
-            _LOGGER.error("Failed to restart service %s: %s", self.service_name, exc)
-            raise
+            _LOGGER.error("Error setting up button module %s: %s", module_name, exc)
+    
+    _LOGGER.info("Completed loading of %d button modules", len(coordinators))
+    
+    # Store coordinators in hass data for cleanup
+    hass.data.setdefault(DOMAIN, {})
+    if "button_coordinators" not in hass.data[DOMAIN]:
+        hass.data[DOMAIN]["button_coordinators"] = []
+    hass.data[DOMAIN]["button_coordinators"].extend(coordinators)

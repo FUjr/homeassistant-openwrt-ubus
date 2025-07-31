@@ -200,13 +200,18 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
     def device_info(self) -> DeviceInfo:
         """Return device info with updated device name."""
         device_name = self._get_device_name()
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.mac_address)},
-            name=device_name,
-            model="Network Device",
-            connections={("mac", self.mac_address)},
-            via_device=(DOMAIN, self.via_device)
-        )
+        device_info_dict = {
+            "identifiers": {(DOMAIN, self.mac_address)},
+            "name": device_name,
+            "model": "Network Device",
+            "connections": {("mac", self.mac_address)},
+        }
+        
+        # Only set via_device if we have a valid AP device (not "Unknown AP")
+        if self.ap_device != "Unknown AP":
+            device_info_dict["via_device"] = (DOMAIN, self.via_device)
+        
+        return DeviceInfo(**device_info_dict)
 
     @property
     def ap_device(self) -> str:

@@ -27,6 +27,7 @@ from .const import (
     API_METHOD_INFO,
     API_METHOD_READ,
     API_METHOD_REBOOT,
+    API_METHOD_DEL_CLIENT,
     API_METHOD_LIST,
     API_METHOD_INIT,
 )
@@ -415,4 +416,45 @@ class ExtendedUbus(Ubus):
             API_SUBSYS_RC, 
             API_METHOD_INIT, 
             {"name": service_name, "action": action}
+        )
+
+    async def check_hostapd_available(self):
+        """Check if hostapd service is available via ubus list."""
+        try:
+            result = await self.api_call(API_RPC_LIST, "*")
+            if not result:
+                return False
+            
+            # Look for any hostapd.* interfaces in the result
+            for interface_name in result.keys():
+                if interface_name.startswith("hostapd."):
+                    _LOGGER.debug("Found hostapd interface: %s", interface_name)
+                    return True
+            
+            _LOGGER.debug("No hostapd interfaces found in ubus list")
+            return False
+            
+        except Exception as exc:
+            _LOGGER.warning("Failed to check hostapd availability: %s", exc)
+            return False
+
+    async def kick_device(self, hostapd_interface, mac_address, ban_time=60000, reason=5):
+        """Kick a device from the AP interface.
+        
+        Args:
+            hostapd_interface: The hostapd interface name (e.g. "hostapd.phy0-ap0")
+            mac_address: MAC address of the device to kick
+            ban_time: Ban time in milliseconds (default: 60000ms = 60s)
+            reason: Deauth reason code (default: 5)
+        """
+        return await self.api_call(
+            API_RPC_CALL,
+            hostapd_interface,
+            API_METHOD_DEL_CLIENT,
+            {
+                "addr": mac_address,
+                "deauth": True,
+                "reason": reason,
+                "ban_time": ban_time
+            }
         )
