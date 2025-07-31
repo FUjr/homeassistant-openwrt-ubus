@@ -171,9 +171,6 @@ class DeviceKickButton(CoordinatorEntity[SharedDataUpdateCoordinator], ButtonEnt
         from homeassistant.helpers.device_registry import DeviceInfo
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{self._host}_ap_{ap_device}")},
-            name=f"AP {ap_device}",
-            manufacturer="OpenWrt",
-            model="Access Point",
         )
     
     @property
