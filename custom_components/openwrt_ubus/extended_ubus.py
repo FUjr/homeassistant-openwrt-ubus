@@ -417,7 +417,7 @@ class ExtendedUbus(Ubus):
             API_METHOD_INIT, 
             {"name": service_name, "action": action}
         )
-
+      
     async def check_hostapd_available(self):
         """Check if hostapd service is available via ubus list."""
         try:

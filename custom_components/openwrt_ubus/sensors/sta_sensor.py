@@ -394,18 +394,18 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
                     
                     if time_diff > 0 and byte_diff >= 0:
                         # Convert bytes/second to Mbps (1 byte/s = 8 bits/s, 1 Mbps = 1,000,000 bits/s)
-                        speed_mbps = (byte_diff * 8) / (time_diff * 1_000_000)
-                        speed_mbps = round(speed_mbps, 3)
+                        speed_kbps = (byte_diff * 8) / (time_diff * 1_000)
+                        speed_kbps = round(speed_kbps, 3)
                     else:
-                        speed_mbps = 0
+                        speed_kbps = 0
                 else:
-                    speed_mbps = 0
+                    speed_kbps = 0
                 
                 # Update previous values for next calculation
                 self._previous_rx_bytes = current_rx_bytes
                 self._previous_update_time = current_time
                 
-                return speed_mbps
+                return speed_kbps
                 
             if key == "tx_speed":
                 tx_data = device_data.get("tx", {})
@@ -424,12 +424,12 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
                     
                     if time_diff > 0 and byte_diff >= 0:
                         # Convert bytes/second to Mbps (1 byte/s = 8 bits/s, 1 Mbps = 1,000,000 bits/s)
-                        speed_mbps = (byte_diff * 8) / (time_diff * 1_000_000)
-                        speed_mbps = round(speed_mbps, 3)
+                        speed_kbps = (byte_diff * 8) / (time_diff * 1_000)
+                        speed_kbps = round(speed_kbps, 3)
                     else:
-                        speed_mbps = 0
+                        speed_kbps = 0
                 else:
-                    speed_mbps = 0
+                    speed_kbps = 0
                 
                 # Update previous values for next calculation
                 self._previous_tx_bytes = current_tx_bytes
@@ -437,7 +437,7 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
                 if self._previous_update_time != current_time:
                     self._previous_update_time = current_time
                 
-                return speed_mbps
+                return speed_kbps
             
             if key == "online":
                 # Device is online if it exists in device_statistics

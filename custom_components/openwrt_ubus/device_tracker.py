@@ -230,6 +230,23 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
             return f"{self._host}_ap_{self.ap_device}"
         return self._host
 
+    @property
+    def ap_device(self) -> str:
+        """Return the access point device this device is connected to."""
+        # Get device statistics from shared coordinator
+        device_stats = self.coordinator.data.get("device_statistics", {})
+        device_data = device_stats.get(self.mac_address) or device_stats.get(self.mac_address.upper())
+        if device_data:
+            return device_data.get("ap_device", "Unknown AP")
+        return "Unknown AP"
+
+    @property
+    def via_device(self) -> str:
+        """Return the via device info for this device."""
+        if self.ap_device != "Unknown AP":
+            return f"{self._host}_ap_{self.ap_device}"
+        return self._host
+
     def _get_device_name(self) -> str:
         """Get the device name from coordinator data or fallback to MAC."""
         connected_router = self._host or "Unknown Router"
