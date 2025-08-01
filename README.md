@@ -139,10 +139,13 @@ cat > /usr/share/rpcd/acl.d/hass.json << 'EOF'
   "hass": {
     "description": "Access role for OpenWrt ubus integration",
     "read": {
-      "file": {
-        "/tmp/*": [ "read" ]
+      "ubus": {
+        "iwinfo": ["devices","info","assoclist",],
+        "hostapd.*": ["get_clients"],
+        "uci": ["get"]
       }
-    }
+    },
+    "write": {}
   }
 }
 EOF

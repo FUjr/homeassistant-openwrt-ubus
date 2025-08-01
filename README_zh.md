@@ -137,12 +137,15 @@ mkdir -p /usr/share/rpcd/acl.d
 cat > /usr/share/rpcd/acl.d/hass.json << 'EOF'
 {
   "hass": {
-    "description": "OpenWrt ubus 集成的访问角色",
+    "description": "Access role for OpenWrt ubus integration",
     "read": {
-      "file": {
-        "/tmp/*": [ "read" ]
+      "ubus": {
+        "iwinfo": ["devices","info","assoclist",],
+        "hostapd.*": ["get_clients"],
+        "uci": ["get"]
       }
-    }
+    },
+    "write": {}
   }
 }
 EOF
