@@ -2,239 +2,335 @@
 
 [中文版本](README_zh.md) | **English Version**
 
-A custom Home Assistant integration that connects to OpenWrt routers via the ubus interface to provide device tracking and system monitoring capabilities.
+## 🚀 Overview
 
-## Features
+The OpenWrt Ubus Integration is a comprehensive Home Assistant custom integration that transforms your OpenWrt router into a powerful smart home hub. By leveraging OpenWrt's native ubus interface, this integration provides real-time device tracking, system monitoring, and advanced network management capabilities directly within Home Assistant.
 
-### 📱 Device Tracking
-- **Wireless Device Detection**: Track connected wireless devices using iwinfo or hostapd
-- **DHCP Client Monitoring**: Monitor DHCP clients using dnsmasq or odhcpd
-- **Real-time Connection Status**: Get live updates on device connectivity
+![Integration Overview](imgs/overview.png)
+*Complete overview of OpenWrt Ubus integration features in Home Assistant*
 
-![Device Tracker](imgs/sta_info_devicetracker.png)
-*Device tracker showing connected wireless devices*
+### Key Capabilities
 
-### 📊 System Sensors
-- **System Information**: Uptime, load averages, memory usage
-- **QModem Support**: Monitor 4G/LTE modem status and connection details
-- **Station Information**: Track wireless station associations and signal strength
+🔍 **Real-time Device Tracking** - Monitor all connected wireless and DHCP devices with live status updates  
+📊 **System Monitoring** - Track router performance, uptime, memory usage, and load statistics  
+🎛️ **Service Management** - Start, stop, and control OpenWrt system services remotely  
+📡 **Wireless Control** - Manage access points and kick unwanted devices  
+🌐 **Multi-Protocol Support** - Compatible with various OpenWrt software configurations  
+⚡ **Performance Optimized** - Batch API calls and intelligent caching for minimal resource usage
 
-![System Information](imgs/system_info_sensor.png)
-*System information sensors in Home Assistant*
-
-### 🔧 Advanced Features
-- **Service Control**: Start, stop, enable, and disable OpenWrt system services
-- **Device Management**: Kick connected devices from wireless network with hostapd integration
-- **Batch API Optimization**: Efficient data retrieval using batch API calls
-- **Configurable Polling**: Adjustable update intervals for different sensor types
-- **Multiple Software Support**: Compatible with various OpenWrt software configurations
-- **Device Registry Integration**: Proper device identification and management
-
-## 📥 Installation
-
-### Method 1: Manual Installation
-
-1. 📂 Download or clone this repository
-2. 📋 Copy the `custom_components/openwrt_ubus` folder to your Home Assistant `custom_components` directory
-3. 🔄 Restart Home Assistant
-4. ⚙️ Go to **Configuration** → **Integrations** → **Add Integration**
-5. 🔍 Search for "OpenWrt ubus" and follow the setup wizard
-
-### Method 2: HACS (Recommended) 🌟
-
-> **Note**: This integration is not yet available in the default HACS repository
-
-1. ➕ Add this repository as a custom repository in HACS
-2. 📦 Install the "OpenWrt ubus" integration
-3. 🔄 Restart Home Assistant
-4. ⚙️ Add the integration through the UI
-
-## ⚙️ Configuration
+## 📥 Installation & Setup
 
 ### Prerequisites ✅
 
-Your OpenWrt router must have:
-- 🔧 `rpcd` service running (usually enabled by default)
-- 🌐 `uhttpd` with ubus JSON-RPC support
+Before installing the integration, ensure your OpenWrt router meets these requirements:
+
+**Required Packages:**
+```bash
+# Install essential packages on your OpenWrt router
+opkg install rpcd uhttpd-mod-ubus
+
+# For device kick functionality (optional)
+opkg install hostapd
+```
+
+**Required Services:**
+```bash
+# Enable required services
+service rpcd start && service rpcd enable
+service uhttpd start && service uhttpd enable
+```
+
+**Router Configuration:**
+- 🔧 `rpcd` service running (handles ubus JSON-RPC)
+- 🌐 `uhttpd` with ubus support (web interface backend)
 - 🔐 Valid user credentials with appropriate permissions
+- 🌍 Network access from Home Assistant to router
 
-### Integration Setup 🛠️
+### Installation Methods
 
-1. Navigate to **Settings** → **Devices & Services** → **Add Integration**
-2. Search for "OpenWrt ubus"
-3. Enter your router configuration:
-   - **🏠 Host**: IP address of your OpenWrt router
-   - **👤 Username**: Login username (usually 'root')
-   - **🔑 Password**: Login password
-   - **📡 Wireless Software**: Choose between 'iwinfo' (default) or 'hostapd'
-   - **🌐 DHCP Software**: Choose between 'dnsmasq' (default), 'odhcpd', or 'none'
+#### Method 1: Manual Installation
+
+1. **📂 Download**: Clone or download this repository
+   ```bash
+   git clone https://github.com/FUjr/homeassistant-openwrt-ubus.git
+   ```
+
+2. **📋 Copy Files**: Copy the integration to your Home Assistant
+   ```bash
+   cp -r homeassistant-openwrt-ubus/custom_components/openwrt_ubus /config/custom_components/
+   ```
+
+3. **🔄 Restart**: Restart Home Assistant
+
+4. **⚙️ Configure**: Go to **Settings** → **Devices & Services** → **Add Integration**
+
+5. **🔍 Search**: Look for "OpenWrt ubus" and follow the setup wizard
+
+#### Method 2: HACS Installation (Recommended) 🌟
+
+> **Note**: This integration is available as a custom HACS repository
+
+1. **➕ Add Repository**: In HACS, go to **Integrations** → **⋮** → **Custom repositories**
+   
+2. **📦 Install**: Add `https://github.com/FUjr/homeassistant-openwrt-ubus` as Integration
+
+3. **⬇️ Download**: Search for "OpenWrt ubus" and install
+
+4. **🔄 Restart**: Restart Home Assistant
+
+5. **⚙️ Setup**: Add the integration through **Settings** → **Devices & Services**
+
+### Router Permissions Setup 🔐
+
+For enhanced functionality (hostname resolution), configure ACL permissions:
+
+#### Create ACL Configuration
+```bash
+# SSH into your OpenWrt router
+ssh root@your_router_ip
+
+# Create ACL directory
+mkdir -p /usr/share/rpcd/acl.d
+
+# Create ACL file for Home Assistant
+cat > /usr/share/rpcd/acl.d/hass.json << 'EOF'
+{
+  "hass": {
+    "description": "Access role for OpenWrt ubus integration",
+    "read": {
+      "file": {
+        "/tmp/*": [ "read" ]
+      }
+    }
+  }
+}
+EOF
+
+# Restart services to apply changes
+/etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
+```
+
+> **Important**: Without ACL configuration, device names may appear as MAC addresses instead of hostnames.
+
+## 🎛️ Features & Configuration
+
+### Initial Setup 🛠️
+
+1. **Navigate to Integration**: Go to **Settings** → **Devices & Services** → **Add Integration**
+2. **Search and Add**: Search for "OpenWrt ubus" and click to add
+3. **Configure Connection**: Enter your router details
 
 ### Configuration Options 📋
 
-| Option | Description | Default | Options |
-|--------|-------------|---------|---------|
-| 🏠 Host | Router IP address | - | Any valid IP |
-| 👤 Username | Login username | - | Usually 'root' |
-| 🔑 Password | Login password | - | Router password |
-| 📡 Wireless Software | Wireless monitoring method | iwinfo | iwinfo, hostapd |
-| 🌐 DHCP Software | DHCP client detection method | dnsmasq | dnsmasq, odhcpd, none |
-| ⏱️ System Sensor Timeout | System data fetch timeout | 30s | 5s-300s |
-| 📊 QModem Sensor Timeout | QModem data fetch timeout | 30s | 5s-300s |
-| ⚙️ Service Timeout | Service control timeout | 30s | 5s-300s |
-| 🚫 Device Kick Buttons | Enable device kick functionality | Disabled | Enabled/Disabled |
+| Option | Description | Default | Available Options |
+|--------|-------------|---------|------------------|
+| 🏠 **Host** | Router IP address | - | Any valid IP address |
+| 👤 **Username** | Login username | - | Usually 'root' |
+| 🔑 **Password** | Login password | - | Router admin password |
+| 📡 **Wireless Software** | Wireless monitoring method | iwinfo | iwinfo, hostapd |
+| 🌐 **DHCP Software** | DHCP client detection | dnsmasq | dnsmasq, odhcpd, none |
+| ⏱️ **System Timeout** | System data fetch timeout | 30s | 5s-300s |
+| 📊 **QModem Timeout** | QModem data fetch timeout | 30s | 5s-300s |
+| ⚙️ **Service Timeout** | Service control timeout | 30s | 5s-300s |
+| 🚫 **Device Kick Buttons** | Enable device kick functionality | Disabled | Enabled/Disabled |
 
-## 📋 Entities
+---
 
-### Device Tracker
-- **Wireless Devices**: All connected wireless clients
-- **DHCP Clients**: All DHCP-assigned devices (if DHCP monitoring enabled)
+### 📱 Device Tracking
 
-### Service Control
-- **🔄 Switch Entities**: Control OpenWrt system services (start/stop)
-- **⚡ Button Entities**: Quick actions for service management (start, stop, enable, disable, restart)
+The integration provides comprehensive device tracking for all connected devices to your OpenWrt router.
 
-### Device Management
-- **🚫 Kick Buttons**: Force disconnect connected wireless devices from access points (requires hostapd)
+![Device Tracking](imgs/sta_info_devicetracker.png)
+*Device tracker entities showing connected wireless devices with real-time status*
 
-![Connected Devices](imgs/system_info_connected_devices.png)
-*Overview of connected devices and service controls in Home Assistant*
+#### Wireless Device Detection
+- **iwinfo Method**: Uses OpenWrt's iwinfo to detect wireless clients
+- **hostapd Method**: Connects directly to hostapd daemon for real-time updates
+- **Real-time Status**: Live updates when devices connect/disconnect
+- **Device Attributes**: MAC address, hostname, signal strength, connection time
 
-### Sensors
+#### DHCP Client Monitoring
+- **dnsmasq Integration**: Monitors DHCP leases from dnsmasq server
+- **odhcpd Support**: Compatible with odhcpd DHCP server
+- **Lease Information**: IP addresses, hostnames, lease expiration
+- **Automatic Discovery**: Automatically detects new DHCP clients
 
-#### 🖥️ System Information
-- `sensor.openwrt_uptime` - System uptime
+**Features:**
+- ✅ Real-time connection status updates
+- 🏷️ Hostname resolution (with proper ACL configuration)
+- 📍 Device location tracking (which AP they're connected to)
+- ⏰ Connection duration tracking
+- 🔄 Automatic entity creation for new devices
+
+---
+
+### 📊 System Monitoring
+
+Comprehensive system health and performance monitoring for your OpenWrt router.
+
+![System Information](imgs/system_info_sensor.png)
+*System sensors displaying uptime, memory usage, and load averages*
+
+#### System Information Sensors
+- `sensor.openwrt_uptime` - System uptime and boot time
 - `sensor.openwrt_load_1` - 1-minute load average
-- `sensor.openwrt_load_5` - 5-minute load average  
+- `sensor.openwrt_load_5` - 5-minute load average
 - `sensor.openwrt_load_15` - 15-minute load average
-- `sensor.openwrt_memory_*` - Various memory statistics
+- `sensor.openwrt_memory_*` - Memory statistics (total, free, available, buffers, cached)
 
-#### 📡 QModem (4G/LTE Modem)
-- `sensor.openwrt_qmodem_*` - Modem status, signal strength, connection details
+#### QModem LTE/4G Support
+Monitor cellular modem status for routers with LTE/4G capabilities.
 
 ![QModem Information](imgs/qmodem_info.png)
-*QModem sensor showing LTE modem status and signal information*
+*QModem sensors showing LTE signal strength, connection status, and data usage*
 
-#### 📶 Wireless Stations
-- `sensor.openwrt_sta_*` - Station signal strength and connection information
+**QModem Sensors Include:**
+- Signal strength and quality
+- Connection status and uptime
+- Data usage statistics
+- Network operator information
+- Modem temperature and status
+
+#### Wireless Station Information
+Track detailed wireless connection information for each connected device.
 
 ![Station Information](imgs/sta_info_sensor.png)
-*Wireless station sensors showing signal strength and connection details*
+*Wireless station sensors showing signal strength and connection quality*
 
-#### 🌐 Access Point Information
-The integration provides detailed information about both AP client mode and master mode:
+**Station Sensors:**
+- Signal strength (RSSI)
+- Connection quality
+- Data rates (TX/RX)
+- Connection duration
+- Authentication status
 
+---
+
+### 🌐 Access Point Management
+
+Monitor and manage wireless access points with detailed status information.
+
+#### AP Client Mode
 ![AP Client Mode](imgs/ap_info_client.png)
-*Access Point in client mode - showing connection to upstream AP*
+*Access Point in client mode - connected to upstream wireless network*
 
+**Client Mode Features:**
+- Upstream AP connection status
+- Signal strength to parent AP
+- Data rate and quality metrics
+- Connection stability monitoring
+
+#### AP Master Mode
 ![AP Master Mode](imgs/ap_info_master.png)
-*Access Point in master mode - showing hosted network information*
+*Access Point in master mode - hosting wireless network for clients*
+
+**Master Mode Features:**
+- Connected client count
+- Channel information
+- Encryption status
+- Bandwidth utilization
+- Network configuration details
+
+---
 
 ### 🎛️ Service Control
-The integration provides comprehensive service control capabilities:
+
+Comprehensive service management for OpenWrt system services with real-time status monitoring.
+
+![Service Control](imgs/service_control.png)
+*Service control switches and buttons for managing OpenWrt system services*
 
 #### Switch Entities
-- **Service Switches**: Toggle services on/off with real-time status updates
-- **Status Monitoring**: Live display of service running state
-- **Batch Status Updates**: Efficient polling of multiple service states
+- **Service Switches**: Toggle services on/off with real-time status
+- **Live Status**: Shows current running state of each service
+- **Batch Updates**: Efficient monitoring of multiple services simultaneously
 
 #### Button Entities
-- **Start Service**: Start a stopped service
-- **Stop Service**: Stop a running service  
-- **Enable Service**: Enable service to start automatically on boot
-- **Disable Service**: Disable service from auto-starting
-- **Restart Service**: Restart a running service (stop then start)
+- **🟢 Start Service**: Start a stopped service
+- **🔴 Stop Service**: Stop a running service
+- **✅ Enable Service**: Enable service to start on boot
+- **❌ Disable Service**: Disable auto-start on boot
+- **🔄 Restart Service**: Restart a running service
 
-**Available Services Include**:
-- `dnsmasq`: DNS and DHCP server
-- `dropbear`: SSH server
-- `firewall`: Firewall service
-- `network`: Network configuration
-- `uhttpd`: Web server
-- `wpad`: Wireless configuration daemon
+**Managed Services Include:**
+- `dnsmasq` - DNS and DHCP server
+- `dropbear` - SSH server daemon
+- `firewall` - Netfilter firewall
+- `network` - Network configuration
+- `uhttpd` - Web server
+- `wpad` - Wireless daemon
 - And many more system services...
 
-**Service Control Features**:
-- ✅ Real-time status monitoring
+**Features:**
 - ⚡ Instant response to state changes
 - 🔄 Automatic status refresh after operations
-- 🛡️ Error handling with user-friendly messages
-- 📊 Batch API optimization for performance
+- 🛡️ Error handling with detailed feedback
+- 📊 Optimized batch API calls for performance
 
-### 🚫 Device Kick Buttons
-The integration provides device management capabilities through kick buttons that allow you to disconnect devices from your wireless network:
+---
 
-#### Features
-- **🔌 Device Disconnection**: Force disconnect connected wireless devices from AP
-- **⏱️ Temporary Ban**: Automatically bans devices for 60 seconds after kicking
-- **🔄 Real-time Updates**: Button availability updates based on device connection status
-- **🎯 Hostapd Integration**: Uses hostapd interface for reliable device management
-- **📍 AP-Specific Control**: Separate buttons for devices on different access points
+### 🚫 Device Management & Control
 
-#### How It Works
-1. **🔍 Automatic Detection**: Integration automatically detects connected wireless devices
-2. **🆔 Button Creation**: Creates kick buttons for each connected device dynamically
-3. **✅ Availability Check**: Buttons are only available when:
-   - Hostapd service is running and accessible via ubus
-   - Target device is currently connected to the wireless network
-   - Device is connected to the correct access point
-4. **⚡ Kick Action**: When pressed, sends deauthentication command to disconnect device
-5. **🔄 Status Update**: Automatically refreshes device status after kick operation
+Advanced device management capabilities including the ability to disconnect unwanted devices.
 
-#### Requirements
-- **📡 hostapd**: Must be installed and running on OpenWrt router
-- **🌐 Ubus Interface**: hostapd must be accessible via ubus (hostapd.*)
-- **🔐 Permissions**: User account needs permission to access hostapd ubus methods
+![Device Kick Control](imgs/ap_control_kick_sta.png)
+*Device kick buttons for disconnecting specific wireless clients*
 
-#### Button Entity Details
-- **🏷️ Entity Name**: `button.kick_[device_name]` or `button.kick_[mac_address]`
-- **📊 Attributes**: 
-  - `device_mac`: MAC address of the target device
-  - `device_name`: Hostname of the device (if available)
-  - `ap_device`: Access point interface (e.g., `phy0-ap0`)
-  - `hostapd_interface`: Full hostapd interface name (e.g., `hostapd.phy0-ap0`)
-- **🔴 Availability**: Automatically becomes unavailable when:
-  - Device disconnects from the network
-  - Hostapd service becomes unavailable
-  - Device moves to a different access point
+#### Device Kick Functionality
+Force disconnect connected wireless devices from your network with temporary bans.
 
-#### Configuration
-Device kick buttons are disabled by default and can be enabled in the integration options:
+**How It Works:**
+1. **🔍 Auto Detection**: Automatically detects connected wireless devices
+2. **🆔 Dynamic Buttons**: Creates kick buttons for each connected device
+3. **✅ Availability Check**: Buttons only appear when:
+   - Device is currently connected
+   - hostapd service is running
+   - Device is on a supported access point
+4. **⚡ Kick Action**: Sends deauthentication command
+5. **🕐 Temporary Ban**: Automatically bans device for 60 seconds
+6. **🔄 Status Update**: Refreshes device status after action
 
+#### Connected Devices Overview
+![Connected Devices](imgs/system_info_connected_devices.png)
+*Overview of all connected devices with management controls*
+
+**Requirements:**
+- **📡 hostapd**: Must be installed and running
+- **🌐 Ubus Access**: hostapd accessible via ubus interface
+- **🔐 Permissions**: Appropriate user permissions for device management
+
+**Button Entity Details:**
+- **Entity Names**: `button.kick_[device_name]` or `button.kick_[mac_address]`
+- **Attributes**: Device MAC, hostname, AP interface, signal strength
+- **Auto-Hide**: Buttons disappear when devices disconnect
+- **Multi-AP Support**: Separate controls for different access points
+
+**Configuration:**
+Device kick buttons are disabled by default. Enable in integration options:
 1. Go to **Settings** → **Devices & Services** → **OpenWrt ubus**
-2. Click **Configure** on the integration
+2. Click **Configure**
 3. Enable **Device Kick Buttons**
 4. Save configuration
 
-#### Dependencies
-The kick device functionality depends on several integration modules:
+---
 
-**Core Dependencies**:
-- `extended_ubus.py`: Provides `check_hostapd_available()` and `kick_device()` methods
-- `shared_data_manager.py`: Manages caching of hostapd availability status (30-minute cache)
-- `buttons/device_kick_button.py`: Implements the kick button entities
+### 🔧 Advanced Configuration
 
-**Data Requirements**:
-- `hostapd_available`: Cached check of hostapd service availability
-- `device_statistics`: Real-time device connection information
-- `ap_info`: Access point configuration and status
+#### Timeout Settings
+- **System Sensor Timeout**: How long to wait for system data (5-300 seconds)
+- **QModem Timeout**: Timeout for LTE/4G modem queries (5-300 seconds)  
+- **Service Timeout**: Timeout for service control operations (5-300 seconds)
 
-**API Calls Used**:
-- `ubus list "*"`: Check for available hostapd interfaces
-- `ubus call hostapd.[interface] del_client`: Kick device from AP
+#### Performance Optimization
+- **Batch API Calls**: Multiple ubus calls combined for efficiency
+- **Intelligent Caching**: Reduces redundant API calls
+- **Configurable Polling**: Adjust update frequencies per sensor type
+- **Background Processing**: Non-blocking operations for better performance
 
-#### Technical Implementation
-```bash
-# Example ubus command executed when kicking a device:
-ubus call hostapd.phy0-ap0 del_client '{"addr":"aa:bb:cc:dd:ee:ff","deauth":true,"reason":5,"ban_time":60000}'
-```
-
-The integration automatically:
-- 🔍 Discovers available hostapd interfaces via `ubus list`
-- 📋 Caches hostapd availability for 30 minutes (configurable)
-- 🎯 Creates device-specific kick buttons for connected devices
-- ⚡ Updates button availability in real-time
-- 🚫 Executes deauthentication with 60-second ban time
-- 🔄 Refreshes device status after kick operations
+#### Software Compatibility
+- **Wireless Options**: Choose between `iwinfo` and `hostapd` based on your setup
+- **DHCP Options**: Support for `dnsmasq`, `odhcpd`, or disable DHCP monitoring
+- **Flexible Configuration**: Adapts to different OpenWrt configurations
 
 ## 🔧 Troubleshooting
 
@@ -254,7 +350,7 @@ The integration automatically:
 - ✅ Verify router permissions allow access to system information
 
 **🏷️ Devices Show MAC Addresses Instead of Hostnames**
-- ✅ Ensure hostname resolution ACL is properly configured (see [Hostname Resolution Configuration](#hostname-resolution-configuration-🏷️))
+- ✅ Ensure hostname resolution ACL is properly configured (see [Router Permissions Setup](#router-permissions-setup-🔐))
 - ✅ Verify DHCP lease files are accessible: `/var/dhcp.leases` or `/tmp/dhcp.leases`
 - ✅ Check that the rpcd service has been restarted after ACL configuration
 - ✅ Confirm the user account is assigned to the correct ACL group
@@ -269,72 +365,6 @@ logger:
     custom_components.openwrt_ubus: debug
     homeassistant.components.device_tracker: debug
 ```
-
-## 🔧 OpenWrt Router Configuration
-
-### Required Packages 📦
-Ensure these packages are installed on your OpenWrt router:
-
-```bash
-# Basic packages (required)
-opkg install rpcd uhttpd-mod-ubus
-
-# Optional packages for enhanced functionality
-opkg install hostapd    # Required for device kick functionality
-```
-
-### Service Configuration ⚙️
-Make sure required services are running:
-
-```bash
-service rpcd start
-service rpcd enable
-service uhttpd start  
-service uhttpd enable
-```
-
-### Permissions 🔐
-The user account needs appropriate permissions to access ubus methods. For the root user, this is typically not an issue.
-
-### Hostname Resolution Configuration 🏷️
-
-> **Important**: If you need hostname resolution for connected devices, additional ACL configuration is required.
-
-To enable hostname resolution, you need to configure rpcd ACL (Access Control List) to allow reading system files. This is necessary for the integration to read hostname information from DHCP lease files and system configuration.
-
-#### Step 1: Create ACL Configuration File
-Create a new ACL file for the Home Assistant integration:
-
-```bash
-# SSH into your OpenWrt router
-ssh root@your_router_ip
-
-# Create the ACL configuration directory if it doesn't exist
-mkdir -p /usr/share/rpcd/acl.d
-
-# Create the ACL configuration file
-cat > /usr/share/rpcd/acl.d/hass.json << 'EOF'
-{
-  "hass": {
-    "description": "Access role for OpenWrt ubus integration",
-    "read": {
-      "file": {
-        "/tmp/*": [ "read" ]
-      }
-    }
-  }
-}
-EOF
-```
-
-#### Step 2: Restart Services
-Restart the required services to apply changes:
-
-```bash
-/etc/init.d/rpcd restart && /etc/init.d/uhttpd restart
-```
-
-> **Note**: Without proper ACL configuration, device names may appear as MAC addresses instead of hostnames in Home Assistant.
 
 ## 👨‍💻 Development
 
