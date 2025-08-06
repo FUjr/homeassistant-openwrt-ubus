@@ -142,6 +142,8 @@ def _calculate_speed(device_data: dict, keys: list[str], sensor_instance=None) -
             speed = (data_bytes - sensor_instance._previous_tx_bytes) / elapsed_time
             sensor_instance._previous_tx_bytes = data_bytes
         # Convert to Kbps
+        if speed < 0:
+            speed = 0
         return speed * 8 / 1024
 
 
