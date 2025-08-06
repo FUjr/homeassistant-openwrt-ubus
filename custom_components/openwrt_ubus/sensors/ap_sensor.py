@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import timedelta
 import logging
-from typing import Any
+from typing import Any, Callable
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -38,6 +39,124 @@ from ..shared_data_manager import SharedDataUpdateCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(seconds=60)  # AP info doesn't change frequently
+
+
+@dataclass
+class SensorValueMapping:
+    """Data class for sensor value mapping configuration."""
+    data_keys: list[str | tuple]
+    convert_function: Callable
+    default_value: Any = None
+
+
+@dataclass  
+class AttributeMapping:
+    """Data class for extra attribute mapping configuration."""
+    data_keys: list[str | tuple]
+    convert_function: Callable
+
+
+def _convert_quality_percentage(ap_data: dict, keys: list[tuple]) -> float | None:
+    """Convert quality to percentage."""
+    for key_tuple in keys:
+        quality = ap_data.get(key_tuple[0])
+        quality_max = ap_data.get(key_tuple[1], 100)
+        if quality:
+            return round((quality / quality_max) * 100, 1)
+    return None
+
+
+def _get_simple_value(ap_data: dict, keys: list[str]) -> Any:
+    """Get simple value from AP data."""
+    return ap_data.get(keys[0]) if keys else None
+
+
+def _get_nested_value(ap_data: dict, keys: list[tuple]) -> Any:
+    """Get value from nested dictionary using tuple keys for nested access."""
+    def get_value(data: dict, key_path: tuple) -> Any:
+        """Recursively get value from nested dictionary using tuple as path."""
+        if not isinstance(data, dict) or not key_path:
+            return None
+        
+        current_key = key_path[0]
+        if current_key not in data:
+            return None
+        
+        # If this is the last key in the path, return the value
+        if len(key_path) == 1:
+            return data.get(current_key)
+        
+        # Otherwise, recursively navigate deeper
+        return get_value(data[current_key], key_path[1:])
+
+    for nested_key in keys:
+        value = get_value(ap_data, nested_key)
+        if value is not None:
+            return value
+    return None
+
+
+def _has_required_data(ap_data: dict, required_keys: list[str | tuple]) -> bool:
+    """Check if AP data contains required keys."""
+    if not required_keys:  # For sensors that don't need specific keys
+        return True
+    
+    for key in required_keys:
+        if isinstance(key, tuple) and len(key) >= 2:
+            # For nested keys like ("hardware", "name") or ("quality", "quality_max")
+            if len(key) == 2:
+                parent_key, child_key = key
+                if parent_key in ap_data:
+                    if isinstance(ap_data[parent_key], dict) and child_key in ap_data[parent_key]:
+                        return True
+                    elif parent_key == "quality" and child_key == "quality_max":
+                        # Special case for quality percentage calculation
+                        return ap_data.get("quality") is not None
+            else:
+                # For deeper nested keys, use the recursive function
+                if _get_nested_value(ap_data, [key]) is not None:
+                    return True
+        elif isinstance(key, str):
+            # For simple keys
+            if key in ap_data:
+                return True
+    
+    return False
+
+
+# Sensor value mapping: sensor_key -> SensorValueMapping
+SENSOR_VALUE_MAPPING = {
+    "ssid": SensorValueMapping(["ssid"], _get_simple_value, None),
+    "bssid": SensorValueMapping(["bssid"], _get_simple_value, None),
+    "channel": SensorValueMapping(["channel"], _get_simple_value, None),
+    "frequency": SensorValueMapping(["frequency"], _get_simple_value, None),
+    "txpower": SensorValueMapping(["txpower"], _get_simple_value, None),
+    "quality": SensorValueMapping([("quality", "quality_max")], _convert_quality_percentage, None),
+    "signal": SensorValueMapping(["signal"], _get_simple_value, None),
+    "noise": SensorValueMapping(["noise"], _get_simple_value, None),
+    "bitrate": SensorValueMapping(["bitrate"], _get_simple_value, None),
+    "mode": SensorValueMapping(["mode"], _get_simple_value, None),
+    "hwmode": SensorValueMapping(["hwmode"], _get_simple_value, None),
+    "htmode": SensorValueMapping(["htmode"], _get_simple_value, None),
+    "country": SensorValueMapping(["country"], _get_simple_value, None),
+}
+
+# Extra attributes mapping: attr_key -> AttributeMapping
+EXTRA_ATTRIBUTES_MAPPING = {
+    "phy": AttributeMapping(["phy"], _get_simple_value),
+    "center_channel": AttributeMapping(["center_chan1"], _get_simple_value),
+    "frequency_offset": AttributeMapping(["frequency_offset"], _get_simple_value),
+    "txpower_offset": AttributeMapping(["txpower_offset"], _get_simple_value),
+    "hardware_name": AttributeMapping([("hardware", "name")], _get_nested_value),
+    "hardware_id": AttributeMapping([("hardware", "id")], _get_nested_value),
+    "supported_ht_modes": AttributeMapping(["htmodes"], _get_simple_value),
+    "supported_hw_modes": AttributeMapping(["hwmodes"], _get_simple_value),
+    "hw_modes_text": AttributeMapping(["hwmodes_text"], _get_simple_value),
+    "encryption_enabled": AttributeMapping([("encryption", "enabled")], _get_nested_value),
+    "wpa_versions": AttributeMapping([("encryption", "wpa")], _get_nested_value),
+    "authentication": AttributeMapping([("encryption", "authentication")], _get_nested_value),
+    "ciphers": AttributeMapping([("encryption", "ciphers")], _get_nested_value),
+}
 
 # AP sensor descriptions (per access point)
 SENSOR_DESCRIPTIONS = [
@@ -175,8 +294,10 @@ async def async_setup_entry(
             return
             
         ap_info_data = coordinator.data["ap_info"]
-        new_devices = set(ap_info_data.keys()) - coordinator.known_devices
+        current_devices = set(ap_info_data.keys())
         
+        # Handle new devices
+        new_devices = current_devices - coordinator.known_devices
         if new_devices:
             _LOGGER.info("Found %d new AP devices: %s", len(new_devices), new_devices)
             
@@ -200,9 +321,13 @@ async def async_setup_entry(
                         )
                         continue
                     
-                    device_sensors_to_add.append(description)
+                    # Check if sensor has required data
+                    ap_data = ap_info_data.get(ap_device, {})
+                    mapping = SENSOR_VALUE_MAPPING.get(description.key)
+                    if mapping and _has_required_data(ap_data, mapping.data_keys):
+                        device_sensors_to_add.append(description)
                 
-                # Only add sensors that don't already exist
+                # Only add sensors that don't already exist and have data
                 if device_sensors_to_add:
                     new_entities.extend([
                         ApSensor(coordinator, description, ap_device)
@@ -217,8 +342,39 @@ async def async_setup_entry(
                 _LOGGER.info("Created %d AP sensor entities for %d new devices", 
                            len(new_entities), len(new_devices))
             else:
-                _LOGGER.debug("No new AP sensor entities to create for %d devices (all already exist)", 
+                _LOGGER.debug("No new AP sensor entities to create for %d devices (all already exist or no data)", 
                             len(new_devices))
+        
+        # Handle removed devices - remove entities for devices that no longer exist
+        removed_devices = coordinator.known_devices - current_devices
+        if removed_devices:
+            _LOGGER.info("Removing %d AP devices: %s", len(removed_devices), removed_devices)
+            entity_registry = er.async_get(hass)
+            
+            for ap_device in removed_devices:
+                for description in SENSOR_DESCRIPTIONS:
+                    unique_id = f"{entry.data[CONF_HOST]}_ap_{ap_device}_{description.key}"
+                    entity_id = entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+                    if entity_id:
+                        entity_registry.async_remove(entity_id)
+                        _LOGGER.debug("Removed AP sensor entity %s", entity_id)
+                
+                coordinator.known_devices.discard(ap_device)
+        
+        # Handle entities for existing devices that no longer have required data
+        entity_registry = er.async_get(hass)
+        for ap_device in current_devices & coordinator.known_devices:
+            ap_data = ap_info_data[ap_device]
+            for description in SENSOR_DESCRIPTIONS:
+                unique_id = f"{entry.data[CONF_HOST]}_ap_{ap_device}_{description.key}"
+                entity_id = entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+                
+                if entity_id:
+                    # Check if entity should be removed due to missing data
+                    mapping = SENSOR_VALUE_MAPPING.get(description.key)
+                    if mapping and not _has_required_data(ap_data, mapping.data_keys):
+                        entity_registry.async_remove(entity_id)
+                        _LOGGER.debug("Removed AP sensor entity %s due to missing data", entity_id)
     
     # Perform first refresh
     await coordinator.async_config_entry_first_refresh()
@@ -229,10 +385,15 @@ async def async_setup_entry(
         ap_info_data = coordinator.data["ap_info"]
         for ap_device in ap_info_data:
             coordinator.known_devices.add(ap_device)
+            ap_data = ap_info_data[ap_device]
+            
+            # Only add sensors that have the required data
             for description in SENSOR_DESCRIPTIONS:
-                initial_entities.append(
-                    ApSensor(coordinator, description, ap_device)
-                )
+                mapping = SENSOR_VALUE_MAPPING.get(description.key)
+                if mapping and _has_required_data(ap_data, mapping.data_keys):
+                    initial_entities.append(
+                        ApSensor(coordinator, description, ap_device)
+                    )
     
     # Add initial entities if any
     if initial_entities:
@@ -292,12 +453,22 @@ class ApSensor(CoordinatorEntity, SensorEntity):
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        return (
+        if not (
             self.coordinator.last_update_success
             and self.coordinator.data is not None
             and "ap_info" in self.coordinator.data
             and self.ap_device in self.coordinator.data["ap_info"]
-        )
+        ):
+            return False
+        
+        # Check if sensor has the required data to show a value
+        ap_data = self.coordinator.data["ap_info"][self.ap_device]
+        mapping = SENSOR_VALUE_MAPPING.get(self.entity_description.key)
+        if not mapping:
+            return False
+        
+        # Return False if none of the required keys exist
+        return _has_required_data(ap_data, mapping.data_keys)
 
     @property
     def native_value(self) -> str | int | float | None:
@@ -312,43 +483,20 @@ class ApSensor(CoordinatorEntity, SensorEntity):
         ap_data = ap_info_data[self.ap_device]
         key = self.entity_description.key
 
+        # Get value mapping for this sensor
+        mapping = SENSOR_VALUE_MAPPING.get(key)
+        if not mapping:
+            return None
+        
+        # Check if any required keys exist in data
+        if not _has_required_data(ap_data, mapping.data_keys):
+            return mapping.default_value
+        
         try:
-            if key == "ssid":
-                return ap_data.get("ssid")
-            elif key == "bssid":
-                return ap_data.get("bssid")
-            elif key == "channel":
-                return ap_data.get("channel")
-            elif key == "frequency":
-                return ap_data.get("frequency")
-            elif key == "txpower":
-                return ap_data.get("txpower")
-            elif key == "quality":
-                quality = ap_data.get("quality")
-                quality_max = ap_data.get("quality_max", 100)
-                if quality is not None and quality_max:
-                    return round((quality / quality_max) * 100, 1)
-                return None
-            elif key == "signal":
-                return ap_data.get("signal")
-            elif key == "noise":
-                return ap_data.get("noise")
-            elif key == "bitrate":
-                return ap_data.get("bitrate")
-            elif key == "mode":
-                return ap_data.get("mode")
-            elif key == "hwmode":
-                return ap_data.get("hwmode")
-            elif key == "htmode":
-                return ap_data.get("htmode")
-            elif key == "country":
-                return ap_data.get("country")
-
+            return mapping.convert_function(ap_data, mapping.data_keys)
         except (KeyError, TypeError, ValueError) as exc:
             _LOGGER.debug("Error getting %s for %s: %s", key, self.ap_device, exc)
-            return None
-
-        return None
+            return mapping.default_value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -368,42 +516,16 @@ class ApSensor(CoordinatorEntity, SensorEntity):
             "last_update": self.coordinator.last_update_success,
         }
 
-        # Add PHY information
-        if "phy" in ap_data:
-            attributes["phy"] = ap_data["phy"]
-
-        # Add frequency information
-        if "center_chan1" in ap_data:
-            attributes["center_channel"] = ap_data["center_chan1"]
-        if "frequency_offset" in ap_data:
-            attributes["frequency_offset"] = ap_data["frequency_offset"]
-        if "txpower_offset" in ap_data:
-            attributes["txpower_offset"] = ap_data["txpower_offset"]
-
-        # Add encryption information
-        encryption = ap_data.get("encryption", {})
-        if encryption:
-            attributes.update({
-                "encryption_enabled": encryption.get("enabled", False),
-                "wpa_versions": encryption.get("wpa", []),
-                "authentication": encryption.get("authentication", []),
-                "ciphers": encryption.get("ciphers", []),
-            })
-
-        # Add supported modes
-        if "htmodes" in ap_data:
-            attributes["supported_ht_modes"] = ap_data["htmodes"]
-        if "hwmodes" in ap_data:
-            attributes["supported_hw_modes"] = ap_data["hwmodes"]
-        if "hwmodes_text" in ap_data:
-            attributes["hw_modes_text"] = ap_data["hwmodes_text"]
-
-        # Add hardware information
-        hardware = ap_data.get("hardware", {})
-        if hardware:
-            if "name" in hardware:
-                attributes["hardware_name"] = hardware["name"]
-            if "id" in hardware:
-                attributes["hardware_id"] = hardware["id"]
+        # Add extra attributes using mapping
+        for attr_key, mapping in EXTRA_ATTRIBUTES_MAPPING.items():
+            try:
+                # Check if required data exists
+                if _has_required_data(ap_data, mapping.data_keys):
+                    value = mapping.convert_function(ap_data, mapping.data_keys)
+                    if value is not None:  # Only add attribute if value is not None
+                        attributes[attr_key] = value
+            except (KeyError, TypeError, ValueError) as exc:
+                _LOGGER.debug("Error getting attribute %s for %s: %s", attr_key, self.ap_device, exc)
+                continue
 
         return attributes
