@@ -221,33 +221,41 @@ class ExtendedUbus(Ubus):
         
         # Process results
         sta_data = {}
+
+        ap_device_keys = list(ap_devices.keys())
+
         for i, result in enumerate(results):
-            if i < len(ap_devices):
-                ap_device = ap_devices[i]
-                try:
-                    # Handle different response formats
-                    if "result" in result:
-                        sta_result = result["result"][1] if len(result["result"]) > 1 else None
-                    elif "error" in result:
-                        _LOGGER.debug("Error in batch call for %s: %s", ap_device, result["error"])
-                        continue
+            # ignore if out of bounds. there has been a new connection?
+            if i >= len(ap_device_keys):
+                continue
+            ap_device = ap_device_keys[i]
+
+            try:
+                # Use the key from the keys list to access the ap_device
+                ap_device = ap_device_keys[i]
+
+                # Handle different response formats
+                if "result" in result:
+                    sta_result = result["result"][1] if len(result["result"]) > 1 else None
+                elif "error" in result:
+                    _LOGGER.debug("Error in batch call for %s: %s", ap_device, result["error"])
+                    continue
+                else:
+                    continue
+
+                if sta_result:
+                    if is_hostapd:
+                        sta_data[ap_device] = {
+                            'devices': self.parse_hostapd_sta_devices(sta_result),
+                            'statistics': self.parse_hostapd_sta_statistics(sta_result)
+                        }
                     else:
-                        continue
-                        
-                    if sta_result:
-                        if is_hostapd:
-                            sta_data[ap_device] = {
-                                'devices': self.parse_hostapd_sta_devices(sta_result),
-                                'statistics': self.parse_hostapd_sta_statistics(sta_result)
-                            }
-                        else:
-                            sta_data[ap_device] = {
-                                'devices': self.parse_sta_devices(sta_result),
-                                'statistics': self.parse_sta_statistics(sta_result)
-                            }
-                except (IndexError, KeyError) as exc:
-                    _LOGGER.debug("Error parsing sta data for %s: %s", ap_device, exc)
-                    
+                        sta_data[ap_device] = {
+                            'devices': self.parse_sta_devices(sta_result),
+                            'statistics': self.parse_sta_statistics(sta_result)
+                        }
+            except (IndexError, KeyError) as exc:
+                _LOGGER.debug("Error parsing sta data index %s: %s", ap_device, exc)
         return sta_data
 
     async def get_all_ap_info_batch(self, ap_devices):
