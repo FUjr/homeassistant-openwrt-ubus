@@ -344,7 +344,7 @@ class SharedUbusDataManager:
             _LOGGER.error("Error fetching hostapd data: %s", exc)
             raise UpdateFailed(f"Error fetching hostapd data: {exc}")
 
-    @ubus_auto_reconnect(max_retries=1)
+    @ubus_auto_reconnect(max_retries=3)
     async def _fetch_iwinfo_data(self, mac2name: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
         """Fetch data from iwinfo using optimized batch calls."""
         client = await self._get_ubus_client("iwinfo")
@@ -352,6 +352,10 @@ class SharedUbusDataManager:
             # Get AP devices
             ap_devices_result = await client.get_ap_devices()
             ap_devices = client.parse_ap_devices(ap_devices_result) if ap_devices_result else []
+            
+            # Skip if no wireless devices found
+            if not ap_devices:
+                return {}
             
             device_statistics = {}
             
