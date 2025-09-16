@@ -186,6 +186,23 @@ class ExtendedUbus(Ubus):
         """Get detailed access point information."""
         return await self.api_call(API_RPC_CALL, API_SUBSYS_IWINFO, API_METHOD_INFO, {"device": ap_device})
 
+    async def get_root_partition_info(self):
+        """Get root partition information (total, free, used, avail in MB)."""
+        try:
+            result = await self.api_call(API_RPC_CALL, API_SUBSYS_SYSTEM, API_METHOD_INFO)
+            if result and "root" in result:
+                # Convert KB to MB
+                return {
+                    "total": result["root"]["total"] / 1024,
+                    "free": result["root"]["free"] / 1024,
+                    "used": result["root"]["used"] / 1024,
+                    "avail": result["root"]["avail"] / 1024
+                }
+            return {"total": 0, "free": 0, "used": 0, "avail": 0}
+        except Exception as exc:
+            _LOGGER.error("Failed to get root partition info: %s", exc)
+            return {"total": 0, "free": 0, "used": 0, "avail": 0}
+
     def parse_sta_devices(self, result):
         """Parse station devices from the ubus result."""
         sta_devices = []

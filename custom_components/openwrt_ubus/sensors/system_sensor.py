@@ -98,6 +98,11 @@ SENSOR_DESCRIPTIONS = [
     SensorEntityDescription(
         key="memory_free",
         name="Free Memory",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfInformation.MEGABYTES,
+        icon="mdi:memory",
+        entity_category=None,
     ),
     SensorEntityDescription(
         key="dhcp_clients_count",
@@ -173,6 +178,22 @@ SENSOR_DESCRIPTIONS = [
         key="board_system",
         name="System",
         icon="mdi:chip",
+        entity_category=None,
+    ),
+    SensorEntityDescription(
+        key="root_filesystem_free",
+        name="Root Filesystem Free",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.MEGABYTES,
+        icon="mdi:harddisk",
+        entity_category=None,
+    ),
+    SensorEntityDescription(
+        key="root_filesystem_total",
+        name="Root Filesystem Total",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.MEGABYTES,
+        icon="mdi:harddisk",
         entity_category=None,
     ),
 ]
@@ -340,6 +361,14 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
             return temperatures.get(sensor_name)
         elif key == "dhcp_clients_count":
             return self.coordinator.data.get("dhcp_clients_count")
+        elif key == "root_filesystem_total":
+            root = self.coordinator.data.get("system_info", {}).get("root", {})
+            total = root.get("total")
+            return round(total / 1024, 2) if total is not None else None
+        elif key == "root_filesystem_free":
+            root = self.coordinator.data.get("system_info", {}).get("root", {})
+            free = root.get("free")
+            return round(free / 1024, 2) if free is not None else None
         
         return None
 
