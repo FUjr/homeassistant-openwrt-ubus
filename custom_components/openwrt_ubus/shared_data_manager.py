@@ -292,8 +292,10 @@ class SharedUbusDataManager:
             # Get device statistics and connection info
             if wireless_software == "hostapd":
                 return await self._fetch_hostapd_data(mac2name)
-            else:
+            elif wireless_software == "iwinfo":
                 return await self._fetch_iwinfo_data(mac2name)
+            else:
+                return {}
         except Exception as exc:
             _LOGGER.error("Error fetching device statistics: %s", exc)
             raise UpdateFailed(f"Error fetching device statistics: {exc}")

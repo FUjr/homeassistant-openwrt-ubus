@@ -11,7 +11,7 @@ CONF_WIRELESS_SOFTWARE = "wireless_software"
 DEFAULT_DHCP_SOFTWARE = "dnsmasq"
 DEFAULT_WIRELESS_SOFTWARE = "iwinfo"
 DHCP_SOFTWARES = ["dnsmasq", "odhcpd", "none"]
-WIRELESS_SOFTWARES = ["hostapd", "iwinfo"]
+WIRELESS_SOFTWARES = ["hostapd", "iwinfo", "none"]
 
 # Sensor enable/disable configuration
 CONF_ENABLE_QMODEM_SENSORS = "enable_qmodem_sensors"
