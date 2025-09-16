@@ -129,6 +129,9 @@ class SharedUbusDataManager:
             "ap_info": timedelta(seconds=ap_timeout),
             "service_status": timedelta(seconds=service_timeout),  # Use configured service timeout
             "hostapd_available": timedelta(minutes=30),  # Very long cache - hostapd availability rarely changes
+            "conntrack_count": timedelta(seconds=system_timeout),  # Connection tracking count
+            "system_temperatures": timedelta(seconds=system_timeout),  # System temperature sensors
+            "dhcp_clients_count": timedelta(seconds=sta_timeout),  # DHCP clients count
         }
         self._update_locks: Dict[str, asyncio.Lock] = {
             key: asyncio.Lock() for key in self._update_intervals
@@ -431,6 +434,39 @@ class SharedUbusDataManager:
         return mac2name
 
     @ubus_auto_reconnect(max_retries=1)
+    async def _fetch_conntrack_count(self) -> Dict[str, Any]:
+        """Fetch connection tracking count."""
+        client = await self._get_ubus_client()
+        try:
+            conntrack_count = await client.get_conntrack_count()
+            return {"conntrack_count": conntrack_count}
+        except Exception as exc:
+            _LOGGER.error("Error fetching connection tracking count: %s", exc)
+            raise UpdateFailed(f"Error fetching connection tracking count: {exc}")
+            
+    @ubus_auto_reconnect(max_retries=1)
+    async def _fetch_system_temperatures(self) -> Dict[str, Any]:
+        """Fetch system temperature sensors."""
+        client = await self._get_ubus_client()
+        try:
+            temperatures = await client.get_system_temperatures()
+            return {"system_temperatures": temperatures}
+        except Exception as exc:
+            _LOGGER.error("Error fetching system temperatures: %s", exc)
+            raise UpdateFailed(f"Error fetching system temperatures: {exc}")
+            
+    @ubus_auto_reconnect(max_retries=1)
+    async def _fetch_dhcp_clients_count(self) -> Dict[str, Any]:
+        """Fetch DHCP clients count."""
+        client = await self._get_ubus_client()
+        try:
+            clients_count = await client.get_dhcp_clients_count()
+            return {"dhcp_clients_count": clients_count}
+        except Exception as exc:
+            _LOGGER.error("Error fetching DHCP clients count: %s", exc)
+            raise UpdateFailed(f"Error fetching DHCP clients count: {exc}")
+
+    @ubus_auto_reconnect(max_retries=1)
     async def _fetch_system_data_batch(self, system_types: set) -> Dict[str, Any]:
         """Fetch system data in batch with auto-reconnect protection."""
         combined_data = {}
@@ -478,6 +514,12 @@ class SharedUbusDataManager:
                     # This method returns raw data, so we need to wrap it
                     raw_data = await self._fetch_service_status()
                     data = {data_type: raw_data}
+                elif data_type == "conntrack_count":
+                    data = await self._fetch_conntrack_count()
+                elif data_type == "system_temperatures":
+                    data = await self._fetch_system_temperatures()
+                elif data_type == "dhcp_clients_count":
+                    data = await self._fetch_dhcp_clients_count()
                 else:
                     raise ValueError(f"Unknown data type: {data_type}")
 

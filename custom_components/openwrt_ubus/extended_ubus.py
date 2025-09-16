@@ -46,6 +46,80 @@ class ExtendedUbus(Ubus):
             API_METHOD_READ,
             {API_PARAM_PATH: path},
         )
+        
+    async def get_conntrack_count(self):
+        """Read connection tracking count from /proc/sys/net/netfilter/nf_conntrack_count."""
+        try:
+            result = await self.file_read("/proc/sys/net/netfilter/nf_conntrack_count")
+            if result and "data" in result:
+                # Convert the data to an integer
+                return int(result["data"].strip())
+            return None
+        except Exception as exc:
+            _LOGGER.debug("Error reading connection tracking count: %s", exc)
+            return None
+            
+    async def get_system_temperatures(self):
+        """Read system temperature sensors from /sys/class/hwmon/*/temp1_input."""
+        try:
+            # First, list all hwmon directories
+            hwmon_list_result = await self.api_call(
+                API_RPC_CALL,
+                API_SUBSYS_FILE,
+                "list",
+                {"path": "/sys/class/hwmon/"},
+            )
+            
+            if not hwmon_list_result or "entries" not in hwmon_list_result:
+                _LOGGER.debug("No hwmon directories found")
+                return {}
+                
+            temperatures = {}
+            
+            # Process each hwmon directory
+            for entry in hwmon_list_result["entries"]:
+                if entry["type"] != "directory":
+                    continue
+                    
+                hwmon_dir = entry["name"]
+                hwmon_path = f"/sys/class/hwmon/{hwmon_dir}"
+                
+                # Try to read the name file
+                try:
+                    name_result = await self.file_read(f"{hwmon_path}/name")
+                    if name_result and "data" in name_result:
+                        sensor_name = name_result["data"].strip()
+                        
+                        # Try to read the temperature file
+                        temp_result = await self.file_read(f"{hwmon_path}/temp1_input")
+                        if temp_result and "data" in temp_result:
+                            try:
+                                # Convert millidegrees to degrees
+                                temp_value = int(temp_result["data"].strip()) / 1000.0
+                                temperatures[sensor_name] = temp_value
+                            except (ValueError, TypeError) as exc:
+                                _LOGGER.debug("Error converting temperature value: %s", exc)
+                except Exception as exc:
+                    _LOGGER.debug("Error reading temperature for %s: %s", hwmon_dir, exc)
+            
+            return temperatures
+        except Exception as exc:
+            _LOGGER.debug("Error reading system temperatures: %s", exc)
+            return {}
+            
+    async def get_dhcp_clients_count(self):
+        """Read DHCP leases file and count non-empty lines to determine client count."""
+        try:
+            result = await self.file_read("/tmp/dhcp.leases")
+            if result and "data" in result:
+                # Count non-empty lines
+                lines = result["data"].splitlines()
+                client_count = sum(1 for line in lines if line.strip())
+                return client_count
+            return 0
+        except Exception as exc:
+            _LOGGER.debug("Error reading DHCP leases file: %s", exc)
+            return 0
 
     async def get_dhcp_method(self, method):
         """Get DHCP method."""
