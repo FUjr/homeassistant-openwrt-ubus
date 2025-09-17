@@ -209,10 +209,18 @@ class ExtendedUbus(Ubus):
         if not result:
             return sta_devices
 
-        # iwinfo format
-        sta_devices.extend(
-            device["mac"] for device in result.get("results", [])
-        )
+        # Handle different response formats from iwinfo
+        if isinstance(result, list):
+            # Direct list format
+            sta_devices.extend(
+                device["mac"] for device in result if isinstance(device, dict) and "mac" in device
+            )
+        elif isinstance(result, dict):
+            # Dictionary format with "results" key
+            sta_devices.extend(
+                device["mac"] for device in result.get("results", [])
+                if isinstance(device, dict) and "mac" in device
+            )
         return sta_devices
 
     def parse_sta_statistics(self, result):
@@ -221,10 +229,26 @@ class ExtendedUbus(Ubus):
         if not result:
             return sta_statistics
 
+        # Handle different response formats from iwinfo
+        devices_list = []
+        if isinstance(result, list):
+            # Direct list format
+            devices_list = result
+        elif isinstance(result, dict):
+            # Dictionary format with "results" key
+            devices_list = result.get("results", [])
+        else:
+            _LOGGER.warning("Unexpected result type in parse_sta_statistics: %s", type(result).__name__)
+            return sta_statistics
+        
         # iwinfo format - each device has detailed statistics
-        for device in result.get("results", []):
-            if "mac" in device:
-                sta_statistics[device["mac"]] = device
+        for device in devices_list:
+            if isinstance(device, dict) and "mac" in device:
+                mac = device["mac"]
+                sta_statistics[mac] = device
+            else:
+                _LOGGER.debug("Invalid device format: %s", device)
+        
         return sta_statistics
 
     def parse_ap_devices(self, result):
@@ -313,17 +337,23 @@ class ExtendedUbus(Ubus):
         # Process results
         sta_data = {}
 
-        ap_device_keys = list(ap_devices.keys())
+        # Handle both list and dict formats for ap_devices
+        if isinstance(ap_devices, list):
+            ap_device_list = ap_devices
+        elif isinstance(ap_devices, dict):
+            ap_device_list = list(ap_devices.keys())
+        else:
+            _LOGGER.error("Unexpected ap_devices type: %s", type(ap_devices).__name__)
+            return {}
 
         for i, result in enumerate(results):
             # ignore if out of bounds. there has been a new connection?
-            if i >= len(ap_device_keys):
+            if i >= len(ap_device_list):
                 continue
-            ap_device = ap_device_keys[i]
+            ap_device = ap_device_list[i]
 
             try:
-                # Use the key from the keys list to access the ap_device
-                ap_device = ap_device_keys[i]
+                # ap_device is already set from ap_device_list[i] above
 
                 # Handle different response formats
                 if "result" in result:
@@ -332,6 +362,7 @@ class ExtendedUbus(Ubus):
                     _LOGGER.debug("Error in batch call for %s: %s", ap_device, result["error"])
                     continue
                 else:
+                    _LOGGER.debug("Unexpected result format for %s: %s", ap_device, result)
                     continue
 
                 if sta_result:

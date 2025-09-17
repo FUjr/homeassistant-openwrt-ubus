@@ -321,6 +321,12 @@ class SharedUbusDataManager:
                 sta_devices = sta_data_batch[ap_device].get('devices', [])
                 sta_stats = sta_data_batch[ap_device].get('statistics', {})
                 
+                # Ensure sta_stats is a dictionary (safety check)
+                if not isinstance(sta_stats, dict):
+                    _LOGGER.warning("Expected statistics to be dict for %s, got %s: %s", 
+                                  ap_device, type(sta_stats).__name__, sta_stats)
+                    sta_stats = {}
+                
                 for mac in sta_devices:
                     normalized_mac = mac.upper()
                     hostname = mac2name.get(normalized_mac, {}).get("hostname", normalized_mac.replace(":", ""))
@@ -335,9 +341,14 @@ class SharedUbusDataManager:
                         "ip_address": ip_address,
                     }
                     
-                    # Add statistics if available
-                    if normalized_mac in sta_stats:
-                        device_info.update(sta_stats[normalized_mac])
+                    # Add statistics if available and valid
+                    if isinstance(sta_stats, dict) and normalized_mac in sta_stats:
+                        stats_data = sta_stats[normalized_mac]
+                        if isinstance(stats_data, dict):
+                            device_info.update(stats_data)
+                        else:
+                            _LOGGER.warning("Expected stats data to be dict for MAC %s, got %s", 
+                                          normalized_mac, type(stats_data).__name__)
                     
                     device_statistics[normalized_mac] = device_info
             
@@ -368,8 +379,16 @@ class SharedUbusDataManager:
                 if ap_device not in sta_data_batch:
                     continue
                     
-                sta_devices = sta_data_batch[ap_device].get('devices', [])
-                sta_stats = sta_data_batch[ap_device].get('statistics', {})
+                device_data = sta_data_batch[ap_device]
+                
+                sta_devices = device_data.get('devices', [])
+                sta_stats = device_data.get('statistics', {})
+                
+                # Ensure sta_stats is a dictionary (safety check)
+                if not isinstance(sta_stats, dict):
+                    _LOGGER.warning("Expected statistics to be dict for %s, got %s: %s", 
+                                  ap_device, type(sta_stats).__name__, sta_stats)
+                    sta_stats = {}
                 
                 for mac in sta_devices:
                     normalized_mac = mac.upper()
@@ -385,15 +404,27 @@ class SharedUbusDataManager:
                         "ip_address": ip_address,
                     }
                     
-                    # Add statistics if available
-                    if normalized_mac in sta_stats:
-                        device_info.update(sta_stats[normalized_mac])
+                    # Add statistics if available and valid
+                    if isinstance(sta_stats, dict) and normalized_mac in sta_stats:
+                        stats_data = sta_stats[normalized_mac]
+                        if isinstance(stats_data, dict):
+                            device_info.update(stats_data)
+                        else:
+                            _LOGGER.warning("Expected stats data to be dict for MAC %s, got %s", 
+                                          normalized_mac, type(stats_data).__name__)
                     
                     device_statistics[normalized_mac] = device_info
             
             return {"device_statistics": device_statistics}
+        except AttributeError as exc:
+            # Handle specific case where result format is unexpected
+            _LOGGER.error("Error fetching iwinfo data - unexpected data format: %s", exc)
+            _LOGGER.debug("iwinfo data fetch error details", exc_info=True)
+            # Return empty result to prevent integration failure
+            return {"device_statistics": {}}
         except Exception as exc:
             _LOGGER.error("Error fetching iwinfo data: %s", exc)
+            _LOGGER.debug("iwinfo data fetch error details", exc_info=True)
             raise UpdateFailed(f"Error fetching iwinfo data: {exc}")
 
     @ubus_auto_reconnect(max_retries=1)
