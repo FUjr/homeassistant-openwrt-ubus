@@ -21,6 +21,7 @@ CONF_ENABLE_STA_SENSORS = "enable_sta_sensors"
 CONF_ENABLE_SYSTEM_SENSORS = "enable_system_sensors"
 CONF_ENABLE_AP_SENSORS = "enable_ap_sensors"
 CONF_ENABLE_ETH_SENSORS = "enable_eth_sensors"
+CONF_ENABLE_MWAN3_SENSORS = "enable_mwan3_sensors"
 CONF_ENABLE_SERVICE_CONTROLS = "enable_service_controls"
 
 CONF_ENABLE_DEVICE_KICK_BUTTONS = "enable_device_kick_buttons"
@@ -31,6 +32,7 @@ CONF_SYSTEM_SENSOR_TIMEOUT = "system_sensor_timeout"
 CONF_QMODEM_SENSOR_TIMEOUT = "qmodem_sensor_timeout"
 CONF_STA_SENSOR_TIMEOUT = "sta_sensor_timeout"
 CONF_AP_SENSOR_TIMEOUT = "ap_sensor_timeout"
+CONF_MWAN3_SENSOR_TIMEOUT = "mwan3_sensor_timeout"
 CONF_SERVICE_TIMEOUT = "service_timeout"
 
 # Default values
@@ -39,6 +41,7 @@ DEFAULT_ENABLE_STA_SENSORS = True
 DEFAULT_ENABLE_SYSTEM_SENSORS = True
 DEFAULT_ENABLE_AP_SENSORS = True
 DEFAULT_ENABLE_ETH_SENSORS = True
+DEFAULT_ENABLE_MWAN3_SENSORS = True
 DEFAULT_ENABLE_SERVICE_CONTROLS = False
 DEFAULT_TRACKING_METHOD = "combined"
 
@@ -48,6 +51,7 @@ DEFAULT_SYSTEM_SENSOR_TIMEOUT = 30
 DEFAULT_QMODEM_SENSOR_TIMEOUT = 120
 DEFAULT_STA_SENSOR_TIMEOUT = 30
 DEFAULT_AP_SENSOR_TIMEOUT = 60
+DEFAULT_MWAN3_SENSOR_TIMEOUT = 60
 DEFAULT_SERVICE_TIMEOUT = 30
 
 # API constants - moved from Ubus/const.py
@@ -67,6 +71,7 @@ API_SUBSYS_IWINFO = "iwinfo"
 API_SUBSYS_SYSTEM = "system"
 API_SUBSYS_UCI = "uci"
 API_SUBSYS_QMODEM = "modem_ctrl"
+API_SUBSYS_MWAN3 = "mwan3"
 API_SUBSYS_RC = "rc"
 API_SUBSYS_WIRELESS = "network.wireless"
 
@@ -77,6 +82,7 @@ API_METHOD_GET_AP = "devices"
 API_METHOD_GET_CLIENTS = "get_clients"
 API_METHOD_GET_STA = "assoclist"
 API_METHOD_GET_QMODEM = "info"
+API_METHOD_GET_MWAN3 = "status"
 API_METHOD_INFO = "info"
 API_METHOD_READ = "read"
 API_METHOD_REBOOT = "reboot"

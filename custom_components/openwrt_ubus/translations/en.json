@@ -25,7 +25,8 @@
           "enable_ap_sensors": "Enable Access Point Sensors",
           "enable_eth_sensors": "Enable Network Interface Sensors",
           "enable_service_controls": "Enable Service Controls",
-          "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)"
+          "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)",
+          "enable_mwan3_sensors": "Enable mwan3 Sensors (if mwan3 is installed)"
         }
       },
       "services": {
@@ -43,7 +44,8 @@
           "qmodem_sensor_timeout": "QModem Sensor Update Interval (seconds)",
           "sta_sensor_timeout": "Station Sensor Update Interval (seconds)",
           "ap_sensor_timeout": "Access Point Sensor Update Interval (seconds)",
-          "service_timeout": "Service Status Update Interval (seconds)"
+          "service_timeout": "Service Status Update Interval (seconds)",
+          "mwan3_sensor_timeout": "mwan3 Status Update Interval (seconds)"
         }
       }
     },
@@ -80,7 +82,9 @@
           "qmodem_sensor_timeout": "QModem Sensor Update Interval (seconds)",
           "sta_sensor_timeout": "Station Sensor Update Interval (seconds)",
           "ap_sensor_timeout": "Access Point Sensor Update Interval (seconds)",
-          "tracking_method": "Tracking Method"
+          "tracking_method": "Tracking Method",
+          "enable_mwan3_sensors": "Enable mwan3 Sensors (if mwan3 is installed)",
+          "mwan3_sensor_timeout": "mwan3 Status Update Interval (seconds)"
         },
         "data_description": {
           "wireless_software": "Software used to get wireless information (iwinfo or hostapd)",
@@ -95,7 +99,9 @@
           "qmodem_sensor_timeout": "How often to update modem sensor data (30-600 seconds)",
           "sta_sensor_timeout": "How often to update station device data (10-300 seconds)",
           "ap_sensor_timeout": "How often to update access point data (30-600 seconds)",
-          "tracking_method": "Tracking method for devices: 'uniqueid' uses MAC address only (device roams between APs), 'combined' uses AP+MAC (separate entities per AP)"
+          "tracking_method": "Tracking method for devices: 'uniqueid' uses MAC address only (device roams between APs), 'combined' uses AP+MAC (separate entities per AP)",
+          "mwan3_sensor_timeout": "How often to update mwan3 status data (30-600 seconds)",
+          "enable_mwan3_sensors": "Monitor mwan3 multi-WAN load balancing status"
         }
       }
     }

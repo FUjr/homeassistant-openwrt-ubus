@@ -35,6 +35,7 @@ from .const import (
     CONF_ENABLE_SYSTEM_SENSORS,
     CONF_ENABLE_AP_SENSORS,
     CONF_ENABLE_ETH_SENSORS,
+    CONF_ENABLE_MWAN3_SENSORS,
     CONF_ENABLE_SERVICE_CONTROLS,
     CONF_ENABLE_DEVICE_KICK_BUTTONS,
     CONF_SELECTED_SERVICES,
@@ -42,6 +43,7 @@ from .const import (
     CONF_QMODEM_SENSOR_TIMEOUT,
     CONF_STA_SENSOR_TIMEOUT,
     CONF_AP_SENSOR_TIMEOUT,
+    CONF_MWAN3_SENSOR_TIMEOUT,
     CONF_SERVICE_TIMEOUT,
     CONF_TRACKING_METHOD,
     DEFAULT_DHCP_SOFTWARE,
@@ -51,12 +53,14 @@ from .const import (
     DEFAULT_ENABLE_SYSTEM_SENSORS,
     DEFAULT_ENABLE_AP_SENSORS,
     DEFAULT_ENABLE_ETH_SENSORS,
+    DEFAULT_ENABLE_MWAN3_SENSORS,
     DEFAULT_ENABLE_SERVICE_CONTROLS,
     DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
     DEFAULT_STA_SENSOR_TIMEOUT,
     DEFAULT_AP_SENSOR_TIMEOUT,
+    DEFAULT_MWAN3_SENSOR_TIMEOUT,
     DEFAULT_SERVICE_TIMEOUT,
     DEFAULT_TRACKING_METHOD,
     DHCP_SOFTWARES,
@@ -91,6 +95,7 @@ STEP_SENSORS_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_ENABLE_STA_SENSORS, default=DEFAULT_ENABLE_STA_SENSORS): bool,
         vol.Optional(CONF_ENABLE_AP_SENSORS, default=DEFAULT_ENABLE_AP_SENSORS): bool,
         vol.Optional(CONF_ENABLE_ETH_SENSORS, default=DEFAULT_ENABLE_ETH_SENSORS): bool,
+        vol.Optional(CONF_ENABLE_MWAN3_SENSORS, default=DEFAULT_ENABLE_MWAN3_SENSORS): bool,
         vol.Optional(CONF_ENABLE_SERVICE_CONTROLS, default=DEFAULT_ENABLE_SERVICE_CONTROLS): bool,
         vol.Optional(CONF_ENABLE_DEVICE_KICK_BUTTONS, default=DEFAULT_ENABLE_DEVICE_KICK_BUTTONS): bool,
     }
@@ -109,6 +114,9 @@ STEP_TIMEOUTS_DATA_SCHEMA = vol.Schema(
             vol.Coerce(int), vol.Range(min=10, max=300)
         ),
         vol.Optional(CONF_AP_SENSOR_TIMEOUT, default=DEFAULT_AP_SENSOR_TIMEOUT): vol.All(
+            vol.Coerce(int), vol.Range(min=30, max=600)
+        ),
+        vol.Optional(CONF_MWAN3_SENSOR_TIMEOUT, default=DEFAULT_MWAN3_SENSOR_TIMEOUT): vol.All(
             vol.Coerce(int), vol.Range(min=30, max=600)
         ),
         vol.Optional(CONF_SERVICE_TIMEOUT, default=DEFAULT_SERVICE_TIMEOUT): vol.All(
@@ -367,6 +375,10 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                     default=current_data.get(CONF_ENABLE_ETH_SENSORS, DEFAULT_ENABLE_ETH_SENSORS),
                 ): bool,
                 vol.Optional(
+                    CONF_ENABLE_MWAN3_SENSORS,
+                    default=current_data.get(CONF_ENABLE_MWAN3_SENSORS, DEFAULT_ENABLE_MWAN3_SENSORS),
+                ): bool,
+                vol.Optional(
                     CONF_ENABLE_SERVICE_CONTROLS,
                     default=current_data.get(CONF_ENABLE_SERVICE_CONTROLS, DEFAULT_ENABLE_SERVICE_CONTROLS),
                 ): bool,
@@ -392,6 +404,10 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                 vol.Optional(
                     CONF_AP_SENSOR_TIMEOUT,
                     default=current_data.get(CONF_AP_SENSOR_TIMEOUT, DEFAULT_AP_SENSOR_TIMEOUT),
+                ): vol.All(vol.Coerce(int), vol.Range(min=30, max=600)),
+                vol.Optional(
+                    CONF_MWAN3_SENSOR_TIMEOUT,
+                    default=current_data.get(CONF_MWAN3_SENSOR_TIMEOUT, DEFAULT_MWAN3_SENSOR_TIMEOUT),
                 ): vol.All(vol.Coerce(int), vol.Range(min=30, max=600)),
                 vol.Optional("refresh_services", default=False): bool,
             }

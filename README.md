@@ -180,6 +180,7 @@ cat > /usr/share/rpcd/acl.d/root.json << 'EOF'
         "file": [ "read" ],
         "uci": [ "get" ],
         "rc": [ "list", "init" ]
+        "mwan3": [ "get" ],
       },
       "file": {
         "/etc/ethers": [ "read" ],
@@ -435,6 +436,21 @@ Essential OpenWrt system services managed by procd:
 - 🛡️ Comprehensive error handling with detailed user feedback
 - 📊 Optimized batch API calls for improved performance and reduced router load
 - 🔍 Service dependency awareness for safe operation ordering
+
+---
+### MWAN3
+When mwan3 sensors are enabled, a device will be created for each configured interface and policy.
+
+#### MWAN3 Interface Entities
+* Status - status of the interface: Online, Offline, Disabled
+* Tracking - status of interface tracking: disabled, active
+* Uptime - duration of interface uptime
+* Tracking IP information: Up, Down, Skipped and Total counts
+
+#### MWAN3 Policy Entities
+* IPv4 and IPv6 interface list - List of currently used interface and percentage of traffic
+* IPv4 and IPv6 Primary Interface - Current active interface with highest percentage of traffic
+* IPv4 and IPv6 count of active interfaces
 
 ---
 

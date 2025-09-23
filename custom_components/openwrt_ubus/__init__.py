@@ -27,6 +27,7 @@ from .const import (
     CONF_ENABLE_STA_SENSORS,
     CONF_ENABLE_SYSTEM_SENSORS,
     CONF_ENABLE_AP_SENSORS,
+    CONF_ENABLE_MWAN3_SENSORS,
     CONF_ENABLE_SERVICE_CONTROLS,
     CONF_SELECTED_SERVICES,
     DEFAULT_DHCP_SOFTWARE,
@@ -35,6 +36,7 @@ from .const import (
     DEFAULT_ENABLE_STA_SENSORS,
     DEFAULT_ENABLE_SYSTEM_SENSORS,
     DEFAULT_ENABLE_AP_SENSORS,
+    DEFAULT_ENABLE_MWAN3_SENSORS,
     DEFAULT_ENABLE_SERVICE_CONTROLS,
     DEFAULT_SELECTED_SERVICES,
     DHCP_SOFTWARES,
@@ -114,6 +116,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Store modem_ctrl availability in hass data
         hass.data[DOMAIN]["modem_ctrl_available"] = modem_ctrl_available
+
+        # Check for mwan3 availability and store the result
+        mwan3_available = False
+        try:
+            mwan3_list = await ubus.list_mwan3()
+            mwan3_available = mwan3_list is not None and bool(mwan3_list)
+            _LOGGER.debug("MWAN3 availability check: %s", mwan3_available)
+        except Exception as exc:
+            _LOGGER.debug("MWAN3 not available: %s", exc)
+            mwan3_available = False
+
+        # Store mwan3 availability in hass data
+        hass.data[DOMAIN]["mwan3_available"] = mwan3_available
 
         # Close the test connection
         await ubus.close()
@@ -316,12 +331,19 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
         entry.data.get(CONF_ENABLE_AP_SENSORS, DEFAULT_ENABLE_AP_SENSORS),
     )
 
+    # Check if MWAN3 sensors are disabled
+    mwan3_enabled = entry.options.get(
+        CONF_ENABLE_MWAN3_SENSORS,
+        entry.data.get(CONF_ENABLE_MWAN3_SENSORS, DEFAULT_ENABLE_MWAN3_SENSORS),
+    )
+
     _LOGGER.debug(
-        "Sensor states - System: %s, QModem: %s, STA: %s, AP: %s",
+        "Sensor states - System: %s, QModem: %s, STA: %s, AP: %s, MWAN3: %s",
         system_enabled,
         qmodem_enabled,
         sta_enabled,
         ap_enabled,
+        mwan3_enabled,
     )
 
     # List all current devices for debugging
@@ -383,8 +405,9 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
                                 and not identifier[1].endswith("_lan")
                                 and not identifier[1].endswith("_wan")
                                 and not identifier[1].endswith("_eth0")
+                                and not identifier[1].startswith(f"{host}_mwan3_")
                             ):
-                                # This is a STA device (not the main router, QModem, AP device, or network interface)
+                                # This is a STA device (not the main router, QModem, AP device, network interface or MWAN device)
                                 _LOGGER.info(
                                     "Removing STA device %s (STA sensors disabled)",
                                     identifier[1],
@@ -407,6 +430,23 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
                         removed_count += 1
                         break
             _LOGGER.debug("Removed %d AP devices", removed_count)
+
+        # If MWAN3 sensors are disabled, remove all MWAN3 devices
+        if not mwan3_enabled:
+            removed_count = 0
+            # Find all MWAN3 devices (devices with identifiers starting with host_mwan3_)
+            for device in list(device_registry.devices.values()):  # Use list() to avoid modification during iteration
+                for identifier in device.identifiers:
+                    if identifier[0] == DOMAIN and identifier[1].startswith(f"{host}_mwan3_"):
+                        # This is an MWAN3 device
+                        _LOGGER.info(
+                            "Removing MWAN3 device %s (MWAN3 sensors disabled)",
+                            identifier[1],
+                        )
+                        device_registry.async_remove_device(device.id)
+                        removed_count += 1
+                        break
+            _LOGGER.debug("Removed %d MWAN3 devices", removed_count)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -447,6 +487,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Clean up modem_ctrl availability data if no more entries
         if len([e for e in hass.config_entries.async_entries(DOMAIN) if e.entry_id != entry.entry_id]) == 0:
             hass.data[DOMAIN].pop("modem_ctrl_available", None)
+
+        hass.data[DOMAIN].pop("mwan3_available", None)
 
     return unload_ok
 
