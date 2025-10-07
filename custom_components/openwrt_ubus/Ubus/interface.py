@@ -23,6 +23,10 @@ from .const import (
     API_SUBSYS_SESSION,
     API_UBUS_RPC_SESSION,
     HTTP_STATUS_OK,
+    UBUS_ERROR_SUCCESS,
+    UBUS_ERROR_PERMISSION_DENIED,
+    UBUS_ERROR_NOT_FOUND,
+    UBUS_ERROR_NO_DATA,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -218,11 +222,43 @@ class Ubus:
 
         if rpc_method == API_RPC_CALL:
             try:
-                return json_response[API_RESULT][1]
-            except IndexError:
+                result = json_response[API_RESULT]
+                if isinstance(result, list) and len(result) > 1:
+                    # Check if first element is an error code
+                    error_code = result[0]
+                    if error_code == UBUS_ERROR_SUCCESS:
+                        # Success - return the data
+                        return result[1]
+                    else:
+                        # Error code - log with descriptive message and return None
+                        error_msg = self._get_error_message(error_code)
+                        _LOGGER.debug("API call failed with error code %s (%s): %s", 
+                                    error_code, error_msg, result[1] if len(result) > 1 else "No error message")
+                        return None
+                elif isinstance(result, list) and len(result) == 1:
+                    # Single element result - might be an error code
+                    error_code = result[0]
+                    error_msg = self._get_error_message(error_code)
+                    _LOGGER.debug("API call failed with error code %s (%s) - no error message", error_code, error_msg)
+                    return None
+                else:
+                    _LOGGER.debug("Unexpected result format: %s", result)
+                    return None
+            except (IndexError, KeyError) as exc:
+                _LOGGER.debug("Error parsing API result: %s", exc)
                 return None
         else:
             return json_response[API_RESULT]
+
+    def _get_error_message(self, error_code):
+        """Get descriptive error message for ubus error codes."""
+        error_messages = {
+            UBUS_ERROR_SUCCESS: "Success",
+            UBUS_ERROR_PERMISSION_DENIED: "Permission Denied",
+            UBUS_ERROR_NOT_FOUND: "Not Found",
+            UBUS_ERROR_NO_DATA: "No Data",
+        }
+        return error_messages.get(error_code, f"Unknown Error ({error_code})")
 
     def api_debugging(self, debug_api):
         """Enable/Disable API calls debugging."""

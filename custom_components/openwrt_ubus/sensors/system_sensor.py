@@ -239,8 +239,8 @@ async def async_setup_entry(
         temperatures = coordinator.data["system_temperatures"]
         for sensor_name, temp_value in temperatures.items():
             temp_description = SensorEntityDescription(
-                key=f"temperature_{sensor_name}",
-                name=f"Temperature {sensor_name}",
+                key=f"{sensor_name}",
+                name=f"{sensor_name}",
                 device_class=SensorDeviceClass.TEMPERATURE,
                 state_class=SensorStateClass.MEASUREMENT,
                 native_unit_of_measurement=UnitOfTemperature.CELSIUS,

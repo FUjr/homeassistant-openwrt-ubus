@@ -69,9 +69,9 @@ class ExtendedUbus(Ubus):
                 "list",
                 {"path": "/sys/class/hwmon/"},
             )
-            
+            _LOGGER.debug("hwmon list result: %s", hwmon_list_result)
             if not hwmon_list_result or "entries" not in hwmon_list_result:
-                _LOGGER.debug("No hwmon directories found")
+                _LOGGER.debug("No hwmon directories found or empty entries in result")
                 return {}
                 
             temperatures = {}
@@ -87,26 +87,37 @@ class ExtendedUbus(Ubus):
                 # Try to read the name file
                 try:
                     name_result = await self.file_read(f"{hwmon_path}/name")
+                    _LOGGER.debug("Read %s/name => %s", hwmon_path, name_result)
+                    sensor_name = f"hwmon{hwmon_dir}"  # Default name based on directory
                     if name_result and "data" in name_result:
                         sensor_name = name_result["data"].strip()
+                    elif name_result is not None:
+                        _LOGGER.debug("Name result exists but no 'data' field: %s", name_result)
+                        # If result is a list with error code, try to continue anyway
+                        if isinstance(name_result, list) and len(name_result) > 0:
+                            _LOGGER.debug("Name file read returned error code: %s, using default name", name_result)
+
+                    # Try multiple temperature inputs if available
+                    temp_path = f"{hwmon_path}/temp1_input"
+                    temp_result = await self.file_read(temp_path)
+                    _LOGGER.debug("Read %s => %s", temp_path, temp_result)
+                    _LOGGER.debug("Temp result type: %s", type(temp_result))
+                    if temp_result and "data" in temp_result:
+                        temp_value = int(temp_result["data"].strip()) / 1000.0
+                        temperatures[sensor_name] = temp_value
+                    elif temp_result is not None:
+                        _LOGGER.debug("Temp result exists but no 'data' field: %s", temp_result)
                         
-                        # Try to read the temperature file
-                        temp_result = await self.file_read(f"{hwmon_path}/temp1_input")
-                        if temp_result and "data" in temp_result:
-                            try:
-                                # Convert millidegrees to degrees
-                                temp_value = int(temp_result["data"].strip()) / 1000.0
-                                temperatures[sensor_name] = temp_value
-                            except (ValueError, TypeError) as exc:
-                                _LOGGER.debug("Error converting temperature value: %s", exc)
-                except Exception as exc:
-                    _LOGGER.debug("Error reading temperature for %s: %s", hwmon_dir, exc)
-            
+                except (ValueError, TypeError) as exc:
+                    _LOGGER.debug("Error converting temperature value from %s: %s", temp_result, exc)
+                    continue
+                    
             return temperatures
+            
         except Exception as exc:
             _LOGGER.debug("Error reading system temperatures: %s", exc)
             return {}
-            
+
     async def get_dhcp_clients_count(self):
         """Read DHCP leases file and count non-empty lines to determine client count."""
         try:
@@ -190,14 +201,19 @@ class ExtendedUbus(Ubus):
         """Get root partition information (total, free, used, avail in MB)."""
         try:
             result = await self.api_call(API_RPC_CALL, API_SUBSYS_SYSTEM, API_METHOD_INFO)
+            _LOGGER.debug("system info raw result: %s", result)
             if result and "root" in result:
                 # Convert KB to MB
-                return {
-                    "total": result["root"]["total"] / 1024,
-                    "free": result["root"]["free"] / 1024,
-                    "used": result["root"]["used"] / 1024,
-                    "avail": result["root"]["avail"] / 1024
-                }
+                try:
+                    return {
+                        "total": result["root"]["total"] / 1024,
+                        "free": result["root"]["free"] / 1024,
+                        "used": result["root"]["used"] / 1024,
+                        "avail": result["root"]["avail"] / 1024
+                    }
+                except Exception as exc:
+                    _LOGGER.debug("Error parsing root partition values: %s", exc)
+                    return {"total": 0, "free": 0, "used": 0, "avail": 0}
             return {"total": 0, "free": 0, "used": 0, "avail": 0}
         except Exception as exc:
             _LOGGER.error("Failed to get root partition info: %s", exc)

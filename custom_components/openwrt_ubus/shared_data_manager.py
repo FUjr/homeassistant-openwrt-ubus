@@ -515,7 +515,8 @@ class SharedUbusDataManager:
                     system_info = await system_client.system_info()
                     self._data_cache["system_info"] = system_info  # Store raw data
                     self._last_update["system_info"] = datetime.now()
-            combined_data["system_info"] = self._data_cache["system_info"]
+            # Use safe get to avoid KeyError if cache not yet populated
+            combined_data["system_info"] = self._data_cache.get("system_info", {})
         
         if "system_board" in system_types:
             if await self._should_update("system_board"):
@@ -523,7 +524,8 @@ class SharedUbusDataManager:
                     board_info = await system_client.system_board()
                     self._data_cache["system_board"] = board_info  # Store raw data
                     self._last_update["system_board"] = datetime.now()
-            combined_data["system_board"] = self._data_cache["system_board"]
+            # Use safe get to avoid KeyError if cache not yet populated
+            combined_data["system_board"] = self._data_cache.get("system_board", {})
         
         return combined_data
 
@@ -596,7 +598,8 @@ class SharedUbusDataManager:
                 # Use cached data if available
                 for data_type in system_types:
                     if data_type in self._data_cache:
-                        combined_data.update(self._data_cache[data_type])
+                        # Ensure cached data is placed under its data_type key
+                        combined_data[data_type] = self._data_cache[data_type]
         
         # Fetch other data types individually
         for data_type in other_types:
