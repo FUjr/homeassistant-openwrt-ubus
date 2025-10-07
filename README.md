@@ -71,7 +71,7 @@ Before installing the integration, ensure your OpenWrt router meets these requir
 **Required Packages:**
 ```bash
 # Install essential packages on your OpenWrt router
-opkg install rpcd uhttpd-mod-ubus
+opkg install rpcd uhttpd-mod-ubus luci-app-uhttpd
 
 # For device kick functionality (optional)
 opkg install hostapd

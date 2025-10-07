@@ -71,7 +71,7 @@ OpenWrt Ubus 集成是一个功能全面的 Home Assistant 自定义集成，它
 **必需软件包：**
 ```bash
 # 在您的 OpenWrt 路由器上安装必要软件包
-opkg install rpcd uhttpd-mod-ubus
+opkg install rpcd uhttpd-mod-ubus luci-app-uhttpd
 
 # 设备踢出功能（可选）
 opkg install hostapd
