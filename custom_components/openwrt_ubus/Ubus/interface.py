@@ -142,12 +142,33 @@ class Ubus:
         
         # Handle single response format (fallback)
         if API_ERROR in json_response:
-            if (
-                API_MESSAGE in json_response[API_ERROR]
-                and json_response[API_ERROR][API_MESSAGE] == "Access denied"
-            ):
-                raise PermissionError(json_response[API_ERROR][API_MESSAGE])
-            raise ConnectionError(json_response[API_ERROR][API_MESSAGE])
+            error_message = json_response[API_ERROR].get(API_MESSAGE, "Unknown error")
+            error_code = json_response[API_ERROR].get("code", -1)
+            
+            # Special handling for permission errors
+            if error_code == -32002 or "Access denied" in error_message:
+                _LOGGER.warning(
+                    "Permission denied when calling %s.%s: %s (code: %d)",
+                    subsystem,
+                    method,
+                    error_message,
+                    error_code
+                )
+                raise PermissionError(
+                    f"Permission denied for {subsystem}.{method}: {error_message} (code: {error_code})"
+                )
+                
+            # General error handling
+            _LOGGER.error(
+                "API call failed for %s.%s: %s (code: %d)",
+                subsystem,
+                method,
+                error_message,
+                error_code
+            )
+            raise ConnectionError(
+                f"API call failed for {subsystem}.{method}: {error_message} (code: {error_code})"
+            )
         return [json_response]
 
     async def api_call(
@@ -213,12 +234,33 @@ class Ubus:
             )
 
         if API_ERROR in json_response:
-            if (
-                API_MESSAGE in json_response[API_ERROR]
-                and json_response[API_ERROR][API_MESSAGE] == "Access denied"
-            ):
-                raise PermissionError(json_response[API_ERROR][API_MESSAGE])
-            raise ConnectionError(json_response[API_ERROR][API_MESSAGE])
+            error_message = json_response[API_ERROR].get(API_MESSAGE, "Unknown error")
+            error_code = json_response[API_ERROR].get("code", -1)
+            
+            # Special handling for permission errors
+            if error_code == -32002 or "Access denied" in error_message:
+                _LOGGER.warning(
+                    "Permission denied when calling %s.%s: %s (code: %d)",
+                    subsystem,
+                    method,
+                    error_message,
+                    error_code
+                )
+                raise PermissionError(
+                    f"Permission denied for {subsystem}.{method}: {error_message} (code: {error_code})"
+                )
+                
+            # General error handling
+            _LOGGER.error(
+                "API call failed for %s.%s: %s (code: %d)",
+                subsystem,
+                method,
+                error_message,
+                error_code
+            )
+            raise ConnectionError(
+                f"API call failed for {subsystem}.{method}: {error_message} (code: {error_code})"
+            )
 
         if rpc_method == API_RPC_CALL:
             try:

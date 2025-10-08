@@ -101,6 +101,8 @@ async def async_setup_entry(
                     if module_name == "eth_sensor":
                         eth_logger = logging.getLogger("custom_components.openwrt_ubus.sensors.eth_sensor")
                         eth_logger.error("Error accessing coordinator for eth_sensor: %s", exc)
+                        eth_logger.error("eth_sensor module entry data: %s", entry.data)
+                        eth_logger.error("eth_sensor module entry options: %s", entry.options)
                     else:
                         _LOGGER.error("Error setting up sensor module %s: %s", module_name, exc)
                     coordinator = None

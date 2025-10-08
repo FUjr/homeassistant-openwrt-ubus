@@ -132,6 +132,7 @@ class SharedUbusDataManager:
             "conntrack_count": timedelta(seconds=system_timeout),  # Connection tracking count
             "system_temperatures": timedelta(seconds=system_timeout),  # System temperature sensors
             "dhcp_clients_count": timedelta(seconds=sta_timeout),  # DHCP clients count
+            "network_devices": timedelta(seconds=system_timeout),  # Network device status
         }
         self._update_locks: Dict[str, asyncio.Lock] = {
             key: asyncio.Lock() for key in self._update_intervals
@@ -508,10 +509,40 @@ class SharedUbusDataManager:
         """Fetch network device status."""
         client = await self._get_ubus_client()
         try:
-            network_devices = await client.get_network_devices()
+            result = await client.get_network_devices()
+            
+            # Debug log the raw response
+            _LOGGER.debug("Raw network devices response: %s", result)
+            
+            # Handle different response formats
+            if isinstance(result, dict) and "values" in result:
+                # Some OpenWrt versions return data in "values" field
+                network_devices = result["values"]
+            
+            # Handle empty response due to permission issues
+            if not result:
+                _LOGGER.warning(
+                    "No network devices data received. "
+                    "Please check OpenWrt permissions for 'network.device' API"
+                )
+                return {"network_devices": {}}
+            elif isinstance(result, dict):
+                # Standard response format
+                network_devices = result
+            else:
+                # Unexpected format
+                _LOGGER.error("Unexpected network devices response format: %s", type(result))
+                network_devices = {}
+            
+            # Validate the response contains expected data
+            if not network_devices or not isinstance(network_devices, dict):
+                _LOGGER.error("Invalid network devices data: %s", network_devices)
+                return {"network_devices": {}}
+                
             return {"network_devices": network_devices}
+            
         except Exception as exc:
-            _LOGGER.error("Error fetching network devices: %s", exc)
+            _LOGGER.error("Error fetching network devices: %s", exc, exc_info=True)
             raise UpdateFailed(f"Error fetching network devices: {exc}")
 
     @ubus_auto_reconnect(max_retries=1)
