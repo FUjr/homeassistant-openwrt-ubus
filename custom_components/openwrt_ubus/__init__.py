@@ -204,8 +204,12 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
                         for identifier in device.identifiers:
                             if (identifier[0] == DOMAIN and identifier[1] != host and 
                                 identifier[1] != f"{host}_qmodem" and 
-                                not identifier[1].startswith(f"{host}_ap_")):
-                                # This is a STA device (not the main router, QModem, or AP device)
+                                not identifier[1].startswith(f"{host}_ap_") and 
+                                not identifier[1].endswith("_br-lan") and 
+                                not identifier[1].endswith("_lan") and 
+                                not identifier[1].endswith("_wan") and 
+                                not identifier[1].endswith("_eth0")):
+                                # This is a STA device (not the main router, QModem, AP device, or network interface)
                                 _LOGGER.info("Removing STA device %s (STA sensors disabled)", identifier[1])
                                 device_registry.async_remove_device(device.id)
                                 removed_count += 1

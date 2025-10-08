@@ -137,20 +137,23 @@ ssh root@your_router_ip
 mkdir -p /usr/share/rpcd/acl.d
 
 # 为 Home Assistant 创建 ACL 文件
-cat > /usr/share/rpcd/acl.d/hass.json << 'EOF'
+cat > /usr/share/rpcd/acl.d/root.json << 'EOF'
 {
-  "hass": {
-    "description": "Access role for OpenWrt ubus integration",
+  "root": {
+    "description": "Root user full access to ubus",
     "read": {
       "ubus": {
-        "iwinfo": ["devices","info","assoclist",],
-        "hostapd.*": ["get_clients"],
-        "uci": ["get"]
+        "*": ["*"]
       }
     },
-    "write": {}
+    "write": {
+      "ubus": {
+        "*": ["*"]
+      }
+    }
   }
 }
+
 EOF
 
 # 重启服务以应用更改
