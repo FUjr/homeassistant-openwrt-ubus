@@ -120,6 +120,7 @@ class SharedUbusDataManager:
         
         self._update_intervals: Dict[str, timedelta] = {
             "system_info": timedelta(seconds=system_timeout),
+            "system_stat": timedelta.min,  # /proc/stat changes very frequently
             "system_board": timedelta(seconds=system_timeout * 2),  # Board info changes less frequently
             "qmodem_info": timedelta(seconds=qmodem_timeout),
             "device_statistics": timedelta(seconds=sta_timeout),
@@ -196,6 +197,17 @@ class SharedUbusDataManager:
         try:
             system_info = await client.system_info()
             return {"system_info": system_info}
+        except Exception as exc:
+            _LOGGER.error("Error fetching system info: %s", exc)
+            raise UpdateFailed(f"Error fetching system info: {exc}")
+
+    @ubus_auto_reconnect(max_retries=1)
+    async def _fetch_system_stat(self) -> Dict[str, Any]:
+        """Fetch system information."""
+        client = await self._get_ubus_client()
+        try:
+            system_stat = await client.system_stat()
+            return {"system_stat": system_stat}
         except Exception as exc:
             _LOGGER.error("Error fetching system info: %s", exc)
             raise UpdateFailed(f"Error fetching system info: {exc}")
@@ -516,6 +528,14 @@ class SharedUbusDataManager:
                     self._data_cache["system_info"] = system_info  # Store raw data
                     self._last_update["system_info"] = datetime.now()
             combined_data["system_info"] = self._data_cache["system_info"]
+	
+        if "system_stat" in system_types:
+            if await self._should_update("system_stat"):
+                async with self._update_locks["system_stat"]:
+                    system_stat = await system_client.system_stat()
+                    self._data_cache["system_stat"] = system_stat  # Store raw data
+                    self._last_update["system_stat"] = datetime.now()
+            combined_data["system_stat"] = self._data_cache["system_stat"]
         
         if "system_board" in system_types:
             if await self._should_update("system_board"):
@@ -537,6 +557,8 @@ class SharedUbusDataManager:
             try:
                 if data_type == "system_info":
                     data = await self._fetch_system_info()
+                elif data_type == "system_stat":
+                    data = await self._fetch_system_stat()
                 elif data_type == "system_board":
                     data = await self._fetch_system_board()
                 elif data_type == "qmodem_info":
@@ -583,7 +605,7 @@ class SharedUbusDataManager:
         combined_data = {}
         
         # Group data types that can be fetched together
-        system_types = {"system_info", "system_board"} & set(data_types)
+        system_types = {"system_info", "system_stat", "system_board"} & set(data_types)
         other_types = set(data_types) - system_types
         
         # Fetch system data together if needed
