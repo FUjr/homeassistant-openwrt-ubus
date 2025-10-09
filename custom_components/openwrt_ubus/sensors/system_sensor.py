@@ -290,8 +290,8 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
         self._host = coordinator.data_manager.entry.data[CONF_HOST]
         self._attr_unique_id = f"{self._host}_{description.key}"
         self._attr_has_entity_name = True
-        self.cpu_total = None
         self.cpu_idle = None
+        self.cpu_total = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -340,7 +340,7 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
         elif key == "cpu_usage":
             system_stat = self.coordinator.data.get("system_stat", {}).get("data", "")
             cpu_data = next((line for line in system_stat.splitlines() if line.startswith("cpu ")), "").split()[1:]
-            cpu_data = [int(x) for x in cpu_data]
+            cpu_data = [int(value) for value in cpu_data]
             if len(cpu_data) < 10:
                 return None
             cpu_idle = cpu_data[3] + cpu_data[4]
