@@ -88,6 +88,14 @@ SENSOR_DESCRIPTIONS = [
         entity_category=None,
     ),
     SensorEntityDescription(
+        key="cpu_usage",
+        name="CPU Usage",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="%",
+        icon="mdi:cpu-64-bit",
+        entity_category=None,
+    ),
+    SensorEntityDescription(
         key="memory_total",
         name="Total Memory",
         device_class=SensorDeviceClass.DATA_SIZE,
@@ -221,7 +229,7 @@ async def async_setup_entry(
     coordinator = SharedDataUpdateCoordinator(
         hass,
         data_manager,
-        ["system_info", "system_board", "conntrack_count", "system_temperatures", "dhcp_clients_count"],  # Data types this coordinator needs
+        ["system_info", "system_stat", "system_board", "conntrack_count", "system_temperatures", "dhcp_clients_count"],  # Data types this coordinator needs
         f"{DOMAIN}_system_{entry.data[CONF_HOST]}",
         scan_interval,
     )
@@ -282,6 +290,8 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
         self._host = coordinator.data_manager.entry.data[CONF_HOST]
         self._attr_unique_id = f"{self._host}_{description.key}"
         self._attr_has_entity_name = True
+        self.cpu_idle = None
+        self.cpu_total = None
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -327,6 +337,23 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
             if isinstance(load, list) and len(load) >= 3:
                 load_map = {"load_1": 0, "load_5": 1, "load_15": 2}
                 return load[load_map[key]] / 1000 if key in load_map else None
+        elif key == "cpu_usage":
+            system_stat = self.coordinator.data.get("system_stat", {}).get("data", "")
+            cpu_data = next((line for line in system_stat.splitlines() if line.startswith("cpu ")), "").split()[1:]
+            cpu_data = [int(value) for value in cpu_data]
+            if len(cpu_data) < 10:
+                return None
+            cpu_idle = cpu_data[3] + cpu_data[4]
+            cpu_total = sum(cpu_data)
+            if self.cpu_idle == None or self.cpu_total == None:
+                cpu_usage = None
+            else:
+                cpu_idle_delta = cpu_idle - self.cpu_idle
+                cpu_total_delta = cpu_total - self.cpu_total
+                cpu_usage = round((1. - cpu_idle_delta/cpu_total_delta) * 100) if cpu_total_delta > 0 else None
+            self.cpu_total = cpu_total
+            self.cpu_idle = cpu_idle
+            return cpu_usage
         elif key.startswith("memory_"):
             memory = system_info.get("memory", {})
             if key == "memory_total":
