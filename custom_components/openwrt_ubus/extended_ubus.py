@@ -165,6 +165,10 @@ class ExtendedUbus(Ubus):
         """System info."""
         return await self.get_system_method(API_METHOD_INFO)
 
+    async def system_stat(self):
+        """Kernel system statistics."""
+        return await self.file_read("/proc/stat")
+
     async def system_reboot(self):
         """System reboot."""
         return await self.get_system_method(API_METHOD_REBOOT)
