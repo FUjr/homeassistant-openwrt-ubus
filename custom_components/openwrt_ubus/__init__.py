@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import voluptuous as vol
@@ -18,6 +19,9 @@ from homeassistant.helpers.typing import ConfigType
 from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
+    CONF_USE_HTTPS,
+    CONF_VERIFY_SSL,
+    CONF_CERT_PATH,
     CONF_ENABLE_QMODEM_SENSORS,
     CONF_ENABLE_STA_SENSORS,
     CONF_ENABLE_SYSTEM_SENSORS,
@@ -39,6 +43,8 @@ from .const import (
 )
 from .extended_ubus import ExtendedUbus
 from .shared_data_manager import SharedUbusDataManager
+from .ubus_client import create_enhanced_extended_ubus_client
+from .security_utils import CredentialManager, safe_log_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,14 +87,45 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Test connection before setting up platforms
     try:
-        url = f"http://{entry.data[CONF_HOST]}/ubus"
+        # Build URL with proper protocol
+        protocol = "https" if entry.data.get(CONF_USE_HTTPS, False) else "http"
+        url = f"{protocol}://{entry.data[CONF_HOST]}/ubus"
+
+        # Configure SSL verification
+        verify_ssl = entry.data.get(CONF_VERIFY_SSL, False)  # 默认不验证SSL
+        cert_path = entry.data.get(CONF_CERT_PATH)
+
+        # If using HTTPS with unverified SSL, warn user
+        if protocol == "https" and not verify_ssl:
+            _LOGGER.warning("HTTPS enabled with SSL verification disabled - this is insecure but necessary for unsigned certificates")
+
+        # Create credential manager for secure handling
+        credentials = CredentialManager(
+            entry.data[CONF_HOST],
+            entry.data[CONF_USERNAME],
+            entry.data[CONF_PASSWORD]
+        )
+
+        safe_log_data(credentials.get_connection_info(), "debug", "Testing connection")
+
         session = async_get_clientsession(hass)
-        ubus = ExtendedUbus(url, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD], session=session)
+        ubus = create_enhanced_extended_ubus_client(
+            url,
+            entry.data[CONF_USERNAME],
+            entry.data[CONF_PASSWORD],
+            session=session,
+            verify_ssl=verify_ssl,
+            cert_file=cert_path
+        )
 
         # Test connection
+        _LOGGER.debug("Testing connection to %s://%s with user %s", protocol, entry.data[CONF_HOST], entry.data[CONF_USERNAME])
         session_id = await ubus.connect()
         if session_id is None:
-            raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {entry.data[CONF_HOST]}")
+            _LOGGER.error("Setup failed: session_id is None for %s://%s", protocol, entry.data[CONF_HOST])
+            raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {entry.data[CONF_HOST]} - session_id is None")
+
+        _LOGGER.info("Successfully connected to OpenWrt device at %s://%s during setup", protocol, entry.data[CONF_HOST])
 
         # Check for modem_ctrl availability and store the result
         modem_ctrl_available = False
@@ -110,7 +147,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data_manager = SharedUbusDataManager(hass, entry)
         hass.data[DOMAIN][f"data_manager_{entry.entry_id}"] = data_manager
 
+    except ConnectionRefusedError as exc:
+        _LOGGER.error("Setup failed: Connection refused for OpenWrt device at %s", entry.data[CONF_HOST])
+        raise ConfigEntryNotReady(f"Connection refused - check if OpenWrt device is running and accessible at {entry.data[CONF_HOST]}") from exc
+    except asyncio.TimeoutError as exc:
+        _LOGGER.error("Setup failed: Connection timeout for OpenWrt device at %s", entry.data[CONF_HOST])
+        raise ConfigEntryNotReady(f"Connection timeout - check network connectivity to {entry.data[CONF_HOST]}") from exc
+    except PermissionError as exc:
+        _LOGGER.error("Setup failed: Authentication failed for user %s on %s", entry.data[CONF_USERNAME], entry.data[CONF_HOST])
+        raise ConfigEntryNotReady(f"Authentication failed - check username and password for {entry.data[CONF_HOST]}") from exc
     except Exception as exc:
+        _LOGGER.exception("Setup failed: Unexpected error connecting to OpenWrt device at %s: %s", entry.data[CONF_HOST], str(exc))
         raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {entry.data[CONF_HOST]}: {exc}") from exc
 
     # Store the config entry data as a mutable dict

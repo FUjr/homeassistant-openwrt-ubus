@@ -5,6 +5,7 @@ import logging
 
 import aiohttp
 
+from ..security_utils import redact_sensitive_data
 from .const import (
     API_DEF_DEBUG,
     API_DEF_SESSION_ID,
@@ -43,6 +44,7 @@ class Ubus:
         session=None,
         timeout=API_DEF_TIMEOUT,
         verify=API_DEF_VERIFY,
+        cert_file=None,
     ):
         """Init OpenWrt ubus API."""
         self.host = host
@@ -51,6 +53,7 @@ class Ubus:
         self.session = session  # Session will be provided externally
         self.timeout = timeout
         self.verify = verify
+        self.cert_file = cert_file
 
         self.debug_api = API_DEF_DEBUG
         self.rpc_id = API_RPC_ID
@@ -76,12 +79,14 @@ class Ubus:
     ):
         """Build API call data."""
         if self.debug_api:
+            # Redact sensitive information from params before logging
+            safe_params = redact_sensitive_data(params) if params else {}
             _LOGGER.debug(
                 'api build: rpc_method="%s" subsystem="%s" method="%s" params="%s"',
                 rpc_method,
                 subsystem,
                 method,
-                params,
+                safe_params,
             )
 
         _params = [self.session_id, subsystem]
@@ -123,10 +128,12 @@ class Ubus:
         json_response = await response.json()
 
         if self.debug_api:
+            # Redact sensitive information from response before logging
+            safe_response = redact_sensitive_data(json_response)
             _LOGGER.debug(
                 'batch call: status="%s" response="%s"',
                 response.status,
-                json_response,
+                safe_response,
             )
 
         # For batch calls, the response is typically an array of responses
@@ -183,12 +190,14 @@ class Ubus:
         self._ensure_session()
 
         if self.debug_api:
+            # Redact sensitive information from params before logging
+            safe_params = redact_sensitive_data(params) if params else {}
             _LOGGER.debug(
                 'api call: rpc_method="%s" subsystem="%s" method="%s" params="%s"',
                 rpc_method,
                 subsystem,
                 method,
-                params,
+                safe_params,
             )
 
         _params = [self.session_id, subsystem]
@@ -210,15 +219,31 @@ class Ubus:
             }
         )
         if self.debug_api:
-            _LOGGER.debug('api call: data="%s"', data)
+            # Redact sensitive information from debug data
+            try:
+                parsed_data = json.loads(data)
+                safe_data = redact_sensitive_data(parsed_data)
+                _LOGGER.debug('api call: data="%s"', json.dumps(safe_data))
+            except (json.JSONDecodeError, Exception):
+                # If parsing fails, log a generic message without the actual data
+                _LOGGER.debug('api call: data="[JSON_DATA_REDACTED]"')
 
         self.rpc_id += 1
         try:
+            # Make the request using the session
+            # SSL verification is handled at the session level
             response = await self.session.post(
-                self.host, data=data, timeout=self.timeout, verify_ssl=self.verify
+                self.host, data=data, timeout=self.timeout,
+                allow_redirects=False  # Disable automatic redirects to catch HTTP->HTTPS redirects
             )
         except aiohttp.ClientError as req_exc:
             _LOGGER.error("api_call exception: %s", req_exc)
+            # Handle SSL certificate errors specifically
+            if "SSL" in str(req_exc) or "certificate" in str(req_exc).lower():
+                _LOGGER.error("SSL Certificate Error: This is usually caused by using HTTPS with a self-signed certificate.")
+                _LOGGER.error("Try using HTTP instead of HTTPS, or disable SSL verification if using self-signed certificates.")
+                _LOGGER.error("Current configuration: host=%s, verify_ssl=%s", self.host, self.verify)
+                _LOGGER.error("This suggests the device is forcing HTTPS redirection even when HTTP is requested.")
             return None
 
         if response.status != HTTP_STATUS_OK:
@@ -227,10 +252,12 @@ class Ubus:
         json_response = await response.json()
 
         if self.debug_api:
+            # Redact sensitive information from response before logging
+            safe_response = redact_sensitive_data(json_response)
             _LOGGER.debug(
                 'api call: status="%s" response="%s"',
                 response.status,
-                json_response,
+                safe_response,
             )
 
         if API_ERROR in json_response:
@@ -317,6 +344,9 @@ class Ubus:
         self.rpc_id = 1
         self.session_id = API_DEF_SESSION_ID
 
+        _LOGGER.debug("Starting ubus connection to host: %s", self.host)
+        _LOGGER.debug("Authenticating with username: %s", self.username)
+
         login = await self.api_call(
             API_RPC_CALL,
             API_SUBSYS_SESSION,
@@ -326,10 +356,19 @@ class Ubus:
                 API_PARAM_PASSWORD: self.password,
             },
         )
+
+        _LOGGER.debug("Login response received: %s", "REDACTED" if login else "None")
+
         if login and API_UBUS_RPC_SESSION in login:
             self.session_id = login[API_UBUS_RPC_SESSION]
+            _LOGGER.debug("Authentication successful, received session_id: %s",
+                         "VALID_SESSION" if self.session_id else "INVALID_SESSION")
         else:
             self.session_id = None
+            _LOGGER.error("Authentication failed - login response: %s",
+                         "Empty response" if not login else f"Missing {API_UBUS_RPC_SESSION} key")
+            if login:
+                _LOGGER.error("Login response keys: %s", list(login.keys()) if isinstance(login, dict) else "Not a dict")
 
         return self.session_id
 

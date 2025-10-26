@@ -8,8 +8,13 @@ PLATFORMS = [Platform.DEVICE_TRACKER, Platform.SENSOR, Platform.SWITCH, Platform
 # Configuration constants
 CONF_DHCP_SOFTWARE = "dhcp_software"
 CONF_WIRELESS_SOFTWARE = "wireless_software"
+CONF_USE_HTTPS = "use_https"
+CONF_VERIFY_SSL = "verify_ssl"
+CONF_CERT_PATH = "cert_path"
 DEFAULT_DHCP_SOFTWARE = "dnsmasq"
 DEFAULT_WIRELESS_SOFTWARE = "iwinfo"
+DEFAULT_USE_HTTPS = False
+DEFAULT_VERIFY_SSL = False  # 默认不验证SSL，因为使用未签名证书
 DHCP_SOFTWARES = ["dnsmasq", "odhcpd", "none"]
 WIRELESS_SOFTWARES = ["hostapd", "iwinfo", "none"]
 
