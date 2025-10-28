@@ -1,0 +1,306 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "OpenWrt ubus",
+        "description": "Configura la connessione al dispositivo OpenWrt utilizzando ubus per il tracciamento dei dispositivi wireless e il monitoraggio del sistema",
+        "data": {
+          "host": "Host",
+          "username": "Utente",
+          "password": "Password",
+          "wireless_software": "Software Wireless",
+          "dhcp_software": "Software DHCP"
+        }
+      },
+      "sensors": {
+        "title": "Configurazione Sensori",
+        "description": "Scegli quali sensori abilitare per {host}",
+        "data": {
+          "enable_system_sensors": "Abilita i sensori di sistema",
+          "enable_qmodem_sensors": "Abilita i sensori QModem",
+          "enable_sta_sensors": "Abilita i sensori Dispositivi Client",
+          "enable_ap_sensors": "Abilita i sensori per l'Access Point",
+          "enable_service_controls": "Abilita il controllo dei servizi",
+          "enable_device_kick_buttons": "Abilita i pulsanti per la disconnessione dei dispositivi (richiede hostapd)"
+        }
+      },
+      "services": {
+        "title": "Selezione Servizi",
+        "description": "Seleziona i servizi da controllare per {host} (trovati {services_count} servizi)",
+        "data": {
+          "selected_services": "Servizi da Controllare"
+        }
+      },
+      "timeouts": {
+        "title": "Configurazione Intervalli",
+        "description": "Configura gli intervalli di aggiornamento per {host}",
+        "data": {
+          "system_sensor_timeout": "Intervallo di aggiornamento sensori di sistema (secondi)",
+          "qmodem_sensor_timeout": "Intervallo di aggiornamento sensori QModem (secondi)",
+          "sta_sensor_timeout": "Intervallo di aggiornamento sensori dispositivi client (secondi)",
+          "ap_sensor_timeout": "Intervallo di aggiornamento sensori Access Point (secondi)",
+          "service_timeout": "Intervallo di aggiornamento stato servizi (secondi)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossibile connettersi",
+      "invalid_auth": "Autenticazione non valida",
+      "unknown": "Errore inatteso",
+      "cannot_get_services": "Impossibile ottenere la lista dei servizi",
+      "no_services_found": "Nessun servizio trovato sul router"
+    },
+    "abort": {
+      "already_configured": "Il dispositivo è già configurato"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configura l'integrazione OpenWrt",
+        "description": "Configura i tipi di sensore, gli intervalli di aggiornamento e altre opzioni per il tuo dispositivo OpenWrt",
+        "data": {
+          "wireless_software": "Software Wireless",
+          "dhcp_software": "Software DHCP", 
+          "enable_system_sensors": "Abilita Sensori di Sistema",
+          "enable_qmodem_sensors": "Abilita Sensori QModem",
+          "enable_sta_sensors": "Abilita Sensori Dispositivi Client",
+          "enable_ap_sensors": "Abilita Sensori Access Point",
+          "enable_service_controls": "Abilita Controlli Servizi",
+          "selected_services": "Servizi da Controllare",
+          "refresh_services": "Aggiorna Lista Servizi",
+          "system_sensor_timeout": "Intervallo di aggiornamento Sensori di Sistema (secondi)",
+          "qmodem_sensor_timeout": "Intervallo di aggiornamento Sensori QModem (secondi)",
+          "sta_sensor_timeout": "Intervallo di aggiornamento Sensori Dispositivi Client (secondi)",
+          "ap_sensor_timeout": "Intervallo di aggiornamento Sensori Access Point (secondi)"
+        },
+        "data_description": {
+          "wireless_software": "Software utilizzato per ottenere informazioni wireless (iwinfo o hostapd)",
+          "dhcp_software": "Software utilizzato per ottenere informazioni sui lease DHCP",
+          "enable_system_sensors": "Monitora le informazioni di sistema del router (uptime, memoria, carico)",
+          "enable_qmodem_sensors": "Monitora le informazioni del modem cellulare (se disponibile)",
+          "enable_sta_sensors": "Monitora i dispositivi WiFi connessi e le loro statistiche",
+          "enable_ap_sensors": "Monitora le informazioni dell'interfaccia Access Point (dettagli rete WiFi)",
+          "system_sensor_timeout": "Frequenza di aggiornamento dei dati dei sensori di sistema (10-300 secondi)",
+          "qmodem_sensor_timeout": "Frequenza di aggiornamento dei dati dei sensori modem (30-600 secondi)",
+          "sta_sensor_timeout": "Frequenza di aggiornamento dei dati dei dispositivi client (10-300 secondi)",
+          "ap_sensor_timeout": "Frequenza di aggiornamento dei dati dell'Access Point (30-600 secondi)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "uptime": {
+        "name": "Tempo di Attività (Uptime)"
+      },
+      "load_1": {
+        "name": "Carico Medio (1m)"
+      },
+      "load_5": {
+        "name": "Carico Medio (5m)"
+      },
+      "load_15": {
+        "name": "Carico Medio (15m)"
+      },
+      "memory_total": {
+        "name": "Memoria Totale"
+      },
+      "memory_free": {
+        "name": "Memoria Libera"
+      },
+      "memory_buffered": {
+        "name": "Memoria Bufferizzata"
+      },
+      "memory_shared": {
+        "name": "Memoria Condivisa"
+      },
+      "memory_usage_percent": {
+        "name": "Utilizzo Memoria"
+      },
+      "swap_total": {
+        "name": "Swap Totale"
+      },
+      "swap_free": {
+        "name": "Swap Libera"
+      },
+      "board_kernel": {
+        "name": "Versione Kernel"
+      },
+      "board_hostname": {
+        "name": "Nome Host"
+      },
+      "board_model": {
+        "name": "Modello Scheda"
+      },
+      "board_system": {
+        "name": "Sistema"
+      },
+      "qmodem_manufacturer": {
+        "name": "Produttore Modem"
+      },
+      "qmodem_revision": {
+        "name": "Revisione Modem"
+      },
+      "qmodem_at_port": {
+        "name": "Porta AT Modem"
+      },
+      "qmodem_temperature": {
+        "name": "Temperatura Modem"
+      },
+      "qmodem_voltage": {
+        "name": "Voltaggio Modem"
+      },
+      "qmodem_connect_status": {
+        "name": "Stato Connessione Modem"
+      },
+      "qmodem_sim_status": {
+        "name": "Stato SIM"
+      },
+      "qmodem_isp": {
+        "name": "Fornitore di Servizi Internet"
+      },
+      "qmodem_sim_slot": {
+        "name": "Slot SIM"
+      },
+      "qmodem_imei": {
+        "name": "IMEI"
+      },
+      "qmodem_imsi": {
+        "name": "IMSI"
+      },
+      "qmodem_iccid": {
+        "name": "ICCID"
+      },
+      "qmodem_lte_rsrp": {
+        "name": "LTE RSRP"
+      },
+      "qmodem_lte_rsrq": {
+        "name": "LTE RSRQ"
+      },
+      "qmodem_lte_rssi": {
+        "name": "LTE RSSI"
+      },
+      "qmodem_lte_sinr": {
+        "name": "LTE SINR"
+      },
+      "qmodem_nr5g_rsrp": {
+        "name": "5G NR RSRP"
+      },
+      "qmodem_nr5g_rsrq": {
+        "name": "5G NR RSRQ"
+      },
+      "qmodem_nr5g_sinr": {
+        "name": "5G NR SINR"
+      },
+      "signal": {
+        "name": "Potenza Segnale"
+      },
+      "signal_avg": {
+        "name": "Potenza Segnale Media"
+      },
+      "noise": {
+        "name": "Livello di Rumore"
+      },
+      "connected_time": {
+        "name": "Tempo di Connessione"
+      },
+      "rx_rate": {
+        "name": "Velocità RX"
+      },
+      "tx_rate": {
+        "name": "Velocità TX"
+      },
+      "rx_packets": {
+        "name": "Pacchetti Ricevuti (RX)"
+      },
+      "tx_packets": {
+        "name": "Pacchetti Trasmessi (TX)"
+      },
+      "rx_bytes": {
+        "name": "Dati Ricevuti (RX)"
+      },
+      "tx_bytes": {
+        "name": "Dati Trasmessi (TX)"
+      },
+      "ssid": {
+        "name": "SSID"
+      },
+      "bssid": {
+        "name": "BSSID"
+      },
+      "channel": {
+        "name": "Canale"
+      },
+      "frequency": {
+        "name": "Frequenza"
+      },
+      "txpower": {
+        "name": "Potenza TX"
+      },
+      "quality": {
+        "name": "Qualità Segnale"
+      },
+      "bitrate": {
+        "name": "Bitrate"
+      },
+      "mode": {
+        "name": "Modalità"
+      },
+      "hwmode": {
+        "name": "Modalità Hardware"
+      },
+      "htmode": {
+        "name": "Modalità HT"
+      },
+      "country": {
+        "name": "Paese"
+      }
+    },
+    "button": {
+      "service_restart": {
+        "name": "Riavvia {service_name}",
+        "state_attributes": {
+          "service_name": {
+            "name": "Nome Servizio"
+          },
+          "host": {
+            "name": "Host Router"
+          },
+          "action": {
+            "name": "Azione"
+          }
+        }
+      },
+      "device_kick": {
+        "name": "Disconnetti {device_name}",
+        "state_attributes": {
+          "mac_address": {
+            "name": "Indirizzo MAC"
+          },
+          "ap_device": {
+            "name": "Access Point"
+          },
+          "hostname": {
+            "name": "Nome Host"
+          },
+          "signal": {
+            "name": "Potenza Segnale"
+          },
+          "connected_time": {
+            "name": "Tempo di Connessione"
+          },
+          "authorized": {
+            "name": "Autorizzato"
+          }
+        }
+      }
+    }
+  },
+  "services": {
+    "scan_devices": {
+      "name": "Scansione dispositivi",
+      "description": "Avvia manualmente una scansione dei dispositivi sul router OpenWrt"
+    }
+  }
+}
