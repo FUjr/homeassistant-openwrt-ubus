@@ -70,6 +70,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Store the configuration for the device tracker
     hass.data[DOMAIN]["config"] = config[DOMAIN]
 
+    # clear session_id for reload
+    for key in list(hass.data[DOMAIN].keys()):
+        if key.startswith("data_manager_"):
+            shared_ubus_data_manager: SharedUbusDataManager = hass.data[DOMAIN][key]
+            shared_ubus_data_manager.logout()
+
     return True
 
 

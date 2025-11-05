@@ -14,6 +14,7 @@ API_RPC_ID = 1
 API_RPC_LIST = "list"
 API_RPC_VERSION = "2.0"
 API_UBUS_RPC_SESSION = "ubus_rpc_session"
+API_UBUS_RPC_SESSION_EXPIRES = "expires"
 
 # Basic parameters
 API_PARAM_PASSWORD = "password"
