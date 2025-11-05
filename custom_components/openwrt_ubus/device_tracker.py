@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from typing import Any
 
 import voluptuous as vol
 from homeassistant.components.device_tracker import (
@@ -15,7 +16,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, entity_registry as er
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -193,147 +193,70 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
     def __init__(self, coordinator: SharedDataUpdateCoordinator, mac_address: str) -> None:
         """Initialize the device tracker."""
         super().__init__(coordinator)
-        self.mac_address = mac_address
+        self._attr_mac_address = mac_address
+        self._attr_source_type = SourceType.ROUTER
         self._host = coordinator.data_manager.entry.data[CONF_HOST]
         self._attr_unique_id = f"{self._host}_{mac_address}"
         self._attr_name = None  # Will be set dynamically
         self._attr_entity_registry_enabled_default = True  # Enable by default
 
     @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info with updated device name."""
-        device_name = self._get_device_name()
-        device_info_dict = {
-            "identifiers": {(DOMAIN, self.mac_address)},
-            "name": device_name,
-            "model": "Network Device",
-            "connections": {("mac", self.mac_address)},
-        }
-
-        # Only set via_device if we have a valid AP device (not "Unknown AP")
-        if self.ap_device != "Unknown AP":
-            device_info_dict["via_device"] = (DOMAIN, self.via_device)
-
-        return DeviceInfo(**device_info_dict)
-
-    @property
-    def ap_device(self) -> str:
-        """Return the access point device this device is connected to."""
-        # Get device statistics from shared coordinator
-        device_stats = self.coordinator.data.get("device_statistics", {})
-        device_data = device_stats.get(self.mac_address) or device_stats.get(self.mac_address.upper())
-        if device_data:
-            return device_data.get("ap_device", "Unknown AP")
-        return "Unknown AP"
-
-    @property
-    def via_device(self) -> str:
-        """Return the via device info for this device."""
-        if self.ap_device != "Unknown AP":
-            return f"{self._host}_ap_{self.ap_device}"
-        return self._host
-
-    @property
-    def ap_device(self) -> str:
-        """Return the access point device this device is connected to."""
-        # Get device statistics from shared coordinator
-        device_stats = self.coordinator.data.get("device_statistics", {})
-        device_data = device_stats.get(self.mac_address) or device_stats.get(self.mac_address.upper())
-        if device_data:
-            return device_data.get("ap_device", "Unknown AP")
-        return "Unknown AP"
-
-    @property
-    def via_device(self) -> str:
-        """Return the via device info for this device."""
-        if self.ap_device != "Unknown AP":
-            return f"{self._host}_ap_{self.ap_device}"
-        return self._host
-
-    def _get_device_name(self) -> str:
-        """Get the device name from coordinator data or fallback to MAC."""
-        connected_router = self._host or "Unknown Router"
-
-        # Get device statistics from shared coordinator
-        device_stats = self.coordinator.data.get("device_statistics", {})
-        device_data = device_stats.get(self.mac_address) or device_stats.get(self.mac_address.upper())
-
-        if device_data:
-            # Use SSID instead of physical interface name
-            ssid = device_data.get("ap_ssid", "Unknown SSID")
-            base_name = f"{connected_router}({ssid})" if ssid != "Unknown SSID" else connected_router
-
-            hostname = device_data.get("hostname")
-
-            # Show hostname if available and meaningful
-            if hostname and hostname != self.mac_address and hostname != self.mac_address.upper() and hostname != "*":
-                # If hostname looks like a domain name, use it directly
-                if "." in hostname:
-                    return f"{base_name} {hostname.split('.')[0]}"
-                else:
-                    return f"{base_name} {hostname}"
-            else:
-                # Try to show IP address if hostname not available
-                ip_address = device_data.get("ip_address", "")
-                if ip_address and ip_address != "Unknown IP":
-                    return f"{base_name} {ip_address}"
-                else:
-                    # Fallback to MAC address
-                    return f"{base_name} {self.mac_address.replace(':', '')}"
-
-        # Fallback to MAC address if no device data found
-        return f"{connected_router} {self.mac_address.replace(':', '')}"
-
-    @property
     def name(self) -> str:
-        """Return the name of the device."""
-        return self._get_device_name()
+        """Return the name of the entity."""
+        hostname = self.hostname
 
-    @property
-    def source_type(self) -> SourceType:
-        """Return the source type of the device."""
-        return SourceType.ROUTER
+        if hostname and hostname != self._attr_mac_address and hostname != self._attr_mac_address.upper() and hostname != "*":
+            return hostname
+
+        return self._attr_mac_address.replace(':', '')
 
     @property
     def is_connected(self) -> bool:
         """Return true if the device is connected to the network."""
-        # Get device statistics from shared coordinator
-        device_stats = self.coordinator.data.get("device_statistics", {})
-        device_data = device_stats.get(self.mac_address) or device_stats.get(self.mac_address.upper())
-
-        if device_data:
+        if device_data := self._device_data():
             connected = device_data.get("connected", False)
-            _LOGGER.debug("Device %s connection status: %s", self.mac_address, connected)
+            _LOGGER.debug("Device %s connection status: %s", self._attr_mac_address, connected)
             return connected
 
-        _LOGGER.debug("Device %s not found in device statistics, assuming disconnected", self.mac_address)
+        _LOGGER.debug("Device %s not found in device statistics, assuming disconnected", self._attr_mac_address)
         return False
 
     @property
     def extra_state_attributes(self) -> dict[str, str]:
         """Return the device state attributes."""
         attributes = {
-            "host": self._host,
-            "mac": self.mac_address,
+            "connection_type": "wireless",
         }
 
-        # Get device statistics from shared coordinator
-        device_stats = self.coordinator.data.get("device_statistics", {})
-        device_data = device_stats.get(self.mac_address) or device_stats.get(self.mac_address.upper())
-
-        if device_data:
+        if self.is_connected:
+            ap_device = "Unknown AP"
+            if device_data := self._device_data():
+                ap_device = device_data.get("ap_device", "Unknown AP")
             attributes.update({
-                "name": self._get_device_name(),
-                "ap_device": device_data.get("ap_device", "Unknown AP"),
-                "hostname": device_data.get("hostname", self.mac_address),
-                "connection_type": "wireless",
+                "ap_device": ap_device,
                 "router": self._host,
-                "ip_address": device_data.get("ip_address", "Unknown IP"),
             })
         else:
             attributes.update({
                 "last_seen": "disconnected",
-                "connection_type": "wireless",
             })
 
         return attributes
+
+    def _device_data(self) -> dict[str, Any] | None:
+        device_stats = self.coordinator.data.get("device_statistics", {})
+        return device_stats.get(self._attr_mac_address) or device_stats.get(self._attr_mac_address.upper())
+
+    @property
+    def hostname(self) -> str | None:
+        """Return the hostname of the device."""
+        if device_data := self._device_data():
+            return device_data.get("hostname")
+        return None
+
+    @property
+    def ip_address(self) -> str | None:
+        """Return the IP address of the device."""
+        if device_data := self._device_data():
+            return device_data.get("ip_address")
+        return None
