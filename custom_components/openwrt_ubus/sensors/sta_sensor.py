@@ -425,6 +425,7 @@ async def async_setup_entry(
             for mac_address in removed_devices:
                 coordinator.known_devices.discard(mac_address)
 
+
     # Perform first refresh
     await coordinator.async_config_entry_first_refresh()
 
@@ -473,7 +474,7 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
         """Initialize the device statistics sensor."""
         super().__init__(coordinator)
         self.entity_description = description
-        self.mac_address = mac_address
+        self._mac_address = mac_address
         self._host = coordinator.data_manager.entry.data[CONF_HOST]
         # Use sensor-specific unique ID pattern to avoid collision with device tracker
         self._attr_unique_id = f"{self._host}_sensor_{mac_address}_{description.key}"
@@ -484,16 +485,43 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
         self._previous_tx_bytes = None
         self._previous_update_time = None
 
+    def _device_data(self) -> dict[str, Any] | None:
+        device_stats = self.coordinator.data.get("device_statistics", {})
+        return device_stats.get(self._mac_address) or device_stats.get(self._mac_address.upper())
+
     @property
-    def device_info(self) -> DeviceInfo:
+    def device_info(self) -> DeviceInfo | None:
         """Return device info to link this sensor to a device."""
-        # Use the same device identifier as device tracker to link them together
+        ap_device = "Unknown AP"
+        if device_data := self._device_data():
+            ap_device = device_data.get("ap_device", "Unknown AP")
         return DeviceInfo(
-            identifiers={(DOMAIN, self.mac_address)},
+            identifiers={(DOMAIN, self._mac_address)},
+            name=self._get_device_name(),
             manufacturer="Unknown",
             model="WiFi Device",
-            connections={("mac", self.mac_address)},
+            connections={("mac", self._mac_address)},
+            via_device=(DOMAIN, f"{self._host}_ap_{ap_device}"),
         )
+
+    def _get_device_name(self) -> str:
+        """Get the device name from coordinator data or fallback to MAC."""
+        if device_data := self._device_data():
+            hostname = device_data.get("hostname")
+
+            # Show hostname if available and meaningful
+            if hostname and hostname != self._mac_address and hostname != self._mac_address.upper() and hostname != "*":
+                # If hostname looks like a domain name, use it directly
+                if "." in hostname:
+                    return hostname.split('.')[0]
+                else:
+                    return hostname
+            else:
+                # Try to show IP address if hostname not available
+                ip_address = device_data.get("ip_address", "")
+                if ip_address and ip_address != "Unknown IP":
+                    return ip_address
+        return self._mac_address.replace(':', '')
 
     @property
     def available(self) -> bool:
@@ -501,31 +529,26 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
         if not (
                 self.coordinator.last_update_success
                 and self.coordinator.data is not None
-                and "device_statistics" in self.coordinator.data
-                and self.mac_address in self.coordinator.data["device_statistics"]
         ):
             return False
 
         # Check if sensor has the required data to show a value
-        device_data = self.coordinator.data["device_statistics"][self.mac_address]
-        mapping = SENSOR_VALUE_MAPPING.get(self.entity_description.key)
-        if not mapping:
-            return False
+        if device_data := self._device_data():
+            mapping = SENSOR_VALUE_MAPPING.get(self.entity_description.key)
+            if not mapping:
+                return False
 
-        # Return False if none of the required keys exist
-        return _has_required_data(device_data, mapping.data_keys)
+            # Return False if none of the required keys exist
+            return _has_required_data(device_data, mapping.data_keys)
+        else:
+            return False
 
     @property
     def native_value(self) -> str | int | float | bool | None:
         """Return the state of the sensor."""
-        if not self.coordinator.data or "device_statistics" not in self.coordinator.data:
+        device_data = self._device_data()
+        if device_data is None:
             return None
-
-        device_stats = self.coordinator.data["device_statistics"]
-        if self.mac_address not in device_stats:
-            return None
-
-        device_data = device_stats[self.mac_address]
         key = self.entity_description.key
 
         # Get value mapping for this sensor
@@ -544,25 +567,21 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
             else:
                 return mapping.convert_function(device_data, mapping.data_keys)
         except (KeyError, TypeError, ValueError) as exc:
-            _LOGGER.debug("Error getting %s for %s: %s", key, self.mac_address, exc)
+            _LOGGER.debug("Error getting %s for %s: %s", key, self._mac_address, exc)
             return mapping.default_value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the state attributes."""
-        if not self.coordinator.data or "device_statistics" not in self.coordinator.data:
+        device_data = self._device_data()
+        if device_data is None:
             return {}
-
-        device_stats = self.coordinator.data["device_statistics"]
-        if self.mac_address not in device_stats:
-            return {}
-
-        device_data = device_stats[self.mac_address]
 
         attributes = {
-            "mac_address": self.mac_address,
+            "mac_address": self._mac_address,
             "router_host": self._host,
             "last_update": self.coordinator.last_update_success,
+            "ap_device": device_data.get("ap_device", "Unknown AP"),
         }
 
         # Add extra attributes using mapping
@@ -574,7 +593,7 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
                     if value is not None:  # Only add attribute if value is not None
                         attributes[attr_key] = value
             except (KeyError, TypeError, ValueError) as exc:
-                _LOGGER.debug("Error getting attribute %s for %s: %s", attr_key, self.mac_address, exc)
+                _LOGGER.debug("Error getting attribute %s for %s: %s", attr_key, self._mac_address, exc)
                 continue
 
         return attributes
