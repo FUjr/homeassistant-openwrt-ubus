@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 import logging
+from datetime import timedelta
 from typing import Any
 
 from homeassistant.components.sensor import (
@@ -15,19 +15,13 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_HOST,
-    CONF_PASSWORD,
-    CONF_USERNAME,
-    UnitOfDataRate,
     UnitOfInformation,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
-    DataUpdateCoordinator,
-    UpdateFailed,
 )
 
 from ..const import (
@@ -122,23 +116,23 @@ SENSOR_DESCRIPTIONS = [
 
 
 async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        async_add_entities: AddEntitiesCallback,
 ) -> SharedDataUpdateCoordinator:
     """Set up the OpenWrt network interface sensors."""
-    
+
     # Get shared data manager
     data_manager_key = f"data_manager_{entry.entry_id}"
     data_manager = hass.data[DOMAIN][data_manager_key]
-    
+
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
         CONF_SYSTEM_SENSOR_TIMEOUT,
         entry.data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT)
     )
     scan_interval = timedelta(seconds=timeout)
-    
+
     # Create coordinator using shared data manager
     coordinator = SharedDataUpdateCoordinator(
         hass,
@@ -152,32 +146,32 @@ async def async_setup_entry(
     await coordinator.async_config_entry_first_refresh()
 
     entities = []
-    
+
     # Get the network devices from coordinator data
     if coordinator.data and "network_devices" in coordinator.data:
         network_devices = coordinator.data["network_devices"]
-        
+
         # Validate network devices data structure
         if not isinstance(network_devices, dict):
             _LOGGER.error("Invalid network devices data format: %s", type(network_devices))
             network_devices = {}
-        
+
         _LOGGER.info("Found %d network devices", len(network_devices))
         _LOGGER.debug("Network devices data: %s", network_devices)
-        
+
         for device_name, device_data in network_devices.items():
             # Skip invalid entries
             if not isinstance(device_data, dict):
                 _LOGGER.debug("Skipping invalid device data for %s", device_name)
                 continue
-                
+
             # Skip loopback and external interfaces (like phy0-ap0, phy1-ap0)
             if device_name in ["lo"] or device_data.get("external", False):
                 _LOGGER.debug("Skipping device %s (loopback or external)", device_name)
                 continue
 
             _LOGGER.debug("Creating sensors for network device: %s", device_name)
-            
+
             # Create sensors for each network interface
             for description in SENSOR_DESCRIPTIONS:
                 entities.append(
@@ -192,7 +186,7 @@ async def async_setup_entry(
 
     async_add_entities(entities, True)
     _LOGGER.info("Created %d network interface sensor entities", len(entities))
-    
+
     # Return the coordinator for the main sensor setup
     return coordinator
 
@@ -201,10 +195,10 @@ class NetworkInterfaceSensor(CoordinatorEntity, SensorEntity):
     """Representation of a OpenWrt network interface sensor."""
 
     def __init__(
-        self,
-        coordinator: SharedDataUpdateCoordinator,
-        description: SensorEntityDescription,
-        device_name: str,
+            self,
+            coordinator: SharedDataUpdateCoordinator,
+            description: SensorEntityDescription,
+            device_name: str,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
@@ -214,6 +208,7 @@ class NetworkInterfaceSensor(CoordinatorEntity, SensorEntity):
 
         # Set unique ID
         self._attr_unique_id = f"{self._host}_{device_name}_{description.key}"
+        self._attr_has_entity_name = True
 
         # Set device info - create a device for each network interface
         self._attr_device_info = DeviceInfo(
@@ -228,10 +223,10 @@ class NetworkInterfaceSensor(CoordinatorEntity, SensorEntity):
         """Get device type from coordinator data."""
         if not self.coordinator.data or "network_devices" not in self.coordinator.data:
             return "Network Device"
-        
+
         network_devices = self.coordinator.data["network_devices"]
         device_data = network_devices.get(self.device_name, {})
-        
+
         devtype = device_data.get("devtype", "")
         if devtype == "bridge":
             return "Bridge"
@@ -248,11 +243,6 @@ class NetworkInterfaceSensor(CoordinatorEntity, SensorEntity):
             return device_type
         else:
             return device_data.get("type", "Network Device")
-
-    @property
-    def name(self) -> str:
-        """Return the name of the sensor."""
-        return f"{self.device_name} {self.entity_description.name}"
 
     @property
     def native_value(self) -> Any:
@@ -291,7 +281,6 @@ class NetworkInterfaceSensor(CoordinatorEntity, SensorEntity):
 
         network_devices = self.coordinator.data["network_devices"]
         device_data = network_devices.get(self.device_name, {})
-        stats = device_data.get("statistics", {})
 
         attrs = {
             "device_type": device_data.get("type", "unknown"),
