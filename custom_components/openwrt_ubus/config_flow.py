@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -17,6 +18,9 @@ from homeassistant.helpers import config_validation as cv
 from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
+    CONF_USE_HTTPS,
+    CONF_VERIFY_SSL,
+    CONF_CERT_PATH,
     CONF_ENABLE_QMODEM_SENSORS,
     CONF_ENABLE_STA_SENSORS,
     CONF_ENABLE_SYSTEM_SENSORS,
@@ -32,6 +36,8 @@ from .const import (
     CONF_SERVICE_TIMEOUT,
     DEFAULT_DHCP_SOFTWARE,
     DEFAULT_WIRELESS_SOFTWARE,
+    DEFAULT_USE_HTTPS,
+    DEFAULT_VERIFY_SSL,
     DEFAULT_ENABLE_QMODEM_SENSORS,
     DEFAULT_ENABLE_STA_SENSORS,
     DEFAULT_ENABLE_SYSTEM_SENSORS,
@@ -53,6 +59,8 @@ from .const import (
 )
 from .Ubus import Ubus
 from .Ubus.const import API_RPC_CALL
+from .ubus_client import create_enhanced_ubus_client
+from .security_utils import safe_log_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,6 +70,9 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
+        vol.Optional(CONF_USE_HTTPS, default=DEFAULT_USE_HTTPS): bool,
+        vol.Optional(CONF_VERIFY_SSL, default=DEFAULT_VERIFY_SSL): bool,
+        vol.Optional(CONF_CERT_PATH): str,
         vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(
             WIRELESS_SOFTWARES
         ),
@@ -113,19 +124,89 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     """
     # Get Home Assistant's HTTP client session
     session = async_get_clientsession(hass)
-    
-    url = f"http://{data[CONF_HOST]}/ubus"
-    ubus = Ubus(url, data[CONF_USERNAME], data[CONF_PASSWORD], session=session)
-    
+
+    # Build URL with proper protocol and explicit port to avoid HTTPS redirection
+    protocol = "https" if data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS) else "http"
+    port = "443" if protocol == "https" else "80"
+    url = f"{protocol}://{data[CONF_HOST]}:{port}/ubus"
+
+    # Configure SSL verification
+    verify_ssl = data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
+    cert_path = data.get(CONF_CERT_PATH)
+
+    # Debug configuration values - inline implementation
+    use_https_raw = data.get(CONF_USE_HTTPS)
+    _LOGGER.info("Configuration Debug [validate_input]:")
+    _LOGGER.info("  Raw CONF_USE_HTTPS value: %s", use_https_raw)
+    _LOGGER.info("  DEFAULT_USE_HTTPS: %s", DEFAULT_USE_HTTPS)
+    _LOGGER.info("  Computed use_https: %s", use_https_raw)
+    _LOGGER.info("  Computed protocol: %s", protocol)
+
+    # Debug logging for URL construction
+    _LOGGER.debug("Connection details: CONF_USE_HTTPS=%s (default: %s), computed protocol=%s, port=%s, URL=%s",
+                 use_https_raw, DEFAULT_USE_HTTPS, protocol, port, url)
+    _LOGGER.debug("SSL settings: verify_ssl=%s (default: %s), cert_path=%s",
+                 verify_ssl, DEFAULT_VERIFY_SSL, cert_path)
+    _LOGGER.info("Attempting connection to OpenWrt device at %s with protocol %s", data[CONF_HOST], protocol)
+
+    # If using HTTPS with unverified SSL, warn user
+    if protocol == "https" and not verify_ssl:
+        _LOGGER.warning("HTTPS enabled with SSL verification disabled - this is insecure but necessary for unsigned certificates")
+
+    safe_log_data(data, "debug", "Attempting connection with these parameters (credentials redacted)")
+
+    ubus = create_enhanced_ubus_client(
+        url,
+        data[CONF_USERNAME],
+        data[CONF_PASSWORD],
+        session=session,
+        verify_ssl=verify_ssl,
+        cert_file=cert_path
+    )
+
     try:
         # Test connection
-        session_id = await ubus.connect()
-        if session_id is None:
-            raise CannotConnect("Failed to connect to OpenWrt device")
+        _LOGGER.info("Attempting to connect to %s://%s with user %s", protocol, data[CONF_HOST], data[CONF_USERNAME])
+        _LOGGER.info("Full connection URL: %s", url)
+        _LOGGER.info("SSL settings: verify_ssl=%s, cert_path=%s", verify_ssl, cert_path)
 
+        session_id = await ubus.connect()
+
+        if session_id is None:
+            _LOGGER.error("=== CONNECTION FAILURE DETAILS ===")
+            _LOGGER.error("Device: %s://%s", protocol, data[CONF_HOST])
+            _LOGGER.error("Username: %s", data[CONF_USERNAME])
+            _LOGGER.error("SSL Verification: %s", verify_ssl)
+            _LOGGER.error("Certificate Path: %s", cert_path)
+            _LOGGER.error("Session ID returned: %s", session_id)
+            _LOGGER.error("Possible causes:")
+            _LOGGER.error("1. Wrong username/password")
+            _LOGGER.error("2. User lacks ubus API permissions")
+            _LOGGER.error("3. ubus service not running on device")
+            _LOGGER.error("4. Network firewall blocking connection")
+            _LOGGER.error("5. SSL/TLS handshake failure (if HTTPS)")
+            _LOGGER.error("6. Device running different OpenWrt version")
+            _LOGGER.error("=== END FAILURE DETAILS ===")
+            raise CannotConnect("Failed to connect to OpenWrt device - session_id is None")
+
+        _LOGGER.info("Successfully connected to OpenWrt device at %s://%s", protocol, data[CONF_HOST])
+        _LOGGER.debug("Received session_id: %s", session_id)
+
+    except ConnectionRefusedError as exc:
+        _LOGGER.error("Connection refused: OpenWrt device at %s is not accepting connections", data[CONF_HOST])
+        raise CannotConnect(f"Connection refused - check if OpenWrt device is running and accessible") from exc
+    except asyncio.TimeoutError as exc:
+        _LOGGER.error("Connection timeout: OpenWrt device at %s did not respond in time", data[CONF_HOST])
+        raise CannotConnect("Connection timeout - check network connectivity") from exc
+    except PermissionError as exc:
+        _LOGGER.error("Authentication failed: Invalid credentials for %s on %s", data[CONF_USERNAME], data[CONF_HOST])
+        raise CannotConnect("Authentication failed - check username and password") from exc
     except Exception as exc:
-        _LOGGER.exception("Unexpected exception during connection test")
-        raise CannotConnect("Failed to connect to OpenWrt device") from exc
+        _LOGGER.exception("Unexpected exception during connection test: %s", str(exc))
+        _LOGGER.error("Connection details - Protocol: %s, Host: %s, Username: %s, Verify SSL: %s, Cert Path: %s",
+                     protocol, data[CONF_HOST], data[CONF_USERNAME], verify_ssl, cert_path)
+        _LOGGER.error("Exception type: %s, Exception message: %s", type(exc).__name__, str(exc))
+        raise CannotConnect(f"Failed to connect to OpenWrt device: {str(exc)}") from exc
     finally:
         # Always close the session to prevent leaks
         await ubus.close()
@@ -137,8 +218,32 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 async def get_services_list(hass: HomeAssistant, data: dict[str, Any]) -> list[str]:
     """Get list of available services from OpenWrt."""
     session = async_get_clientsession(hass)
-    url = f"http://{data[CONF_HOST]}/ubus"
-    ubus = Ubus(url, data[CONF_USERNAME], data[CONF_PASSWORD], session=session)
+
+    # Build URL with proper protocol and explicit port to avoid HTTPS redirection
+    protocol = "https" if data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS) else "http"
+    port = "443" if protocol == "https" else "80"
+    url = f"{protocol}://{data[CONF_HOST]}:{port}/ubus"
+
+    # Configure SSL verification
+    verify_ssl = data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
+    cert_path = data.get(CONF_CERT_PATH)
+
+    # Debug logging for services list
+    _LOGGER.debug("Services list - Connection details: CONF_USE_HTTPS=%s (default: %s), computed protocol=%s, port=%s, URL=%s",
+                 data.get(CONF_USE_HTTPS), DEFAULT_USE_HTTPS, protocol, port, url)
+
+    # If using HTTPS with unverified SSL, warn user
+    if protocol == "https" and not verify_ssl:
+        _LOGGER.warning("HTTPS enabled with SSL verification disabled - this is insecure but necessary for unsigned certificates")
+
+    ubus = create_enhanced_ubus_client(
+        url,
+        data[CONF_USERNAME],
+        data[CONF_PASSWORD],
+        session=session,
+        verify_ssl=verify_ssl,
+        cert_file=cert_path
+    )
     
     try:
         session_id = await ubus.connect()

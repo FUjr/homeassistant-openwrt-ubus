@@ -8,6 +8,9 @@
           "host": "Host",
           "username": "Username",
           "password": "Password",
+          "use_https": "Use HTTPS",
+          "verify_ssl": "Verify SSL Certificate",
+          "cert_path": "Custom Certificate Path (optional)",
           "wireless_software": "Wireless Software",
           "dhcp_software": "DHCP Software"
         }
@@ -47,7 +50,10 @@
       "invalid_auth": "Invalid authentication",
       "unknown": "Unexpected error",
       "cannot_get_services": "Failed to get services list",
-      "no_services_found": "No services found on the router"
+      "no_services_found": "No services found on the router",
+      "network_timeout": "Network timeout",
+      "permission_denied": "Permission denied",
+      "service_unavailable": "Service unavailable"
     },
     "abort": {
       "already_configured": "Device is already configured"
