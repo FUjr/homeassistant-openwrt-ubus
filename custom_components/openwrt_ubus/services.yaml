@@ -6,3 +6,60 @@ scan_devices:
   target:
     entity:
       integration: openwrt_ubus
+uci_get:
+  name: UCI get
+  description: Read a UCI value via ubus on the OpenWrt router
+  fields:
+    config:
+      name: Config
+      description: UCI config name (e.g. firewall)
+      example: firewall
+      required: true
+      selector:
+        text:
+    section:
+      name: Section
+      description: Section name or type/index (e.g. block_user_7085c2 or @rule[3])
+      example: block_user_7085c2
+      required: false
+      selector:
+        text:
+    option:
+      name: Option
+      description: Option name (e.g. enabled)
+      example: enabled
+      required: false
+      selector:
+        text:
+uci_set_commit:
+  name: UCI set + commit
+  description: Set a UCI option value and commit the change
+  fields:
+    config:
+      name: Config
+      description: UCI config name (e.g. firewall)
+      required: true
+      example: firewall
+      selector:
+        text:
+    section:
+      name: Section
+      description: Section name or type/index (e.g. block_user_7085c2)
+      required: true
+      example: block_user_7085c2
+      selector:
+        text:
+    option:
+      name: Option
+      description: Option name to set (e.g. enabled)
+      required: true
+      example: enabled
+      selector:
+        text:
+    value:
+      name: Value
+      description: Option value (e.g. "0" or "1")
+      required: true
+      example: "0"
+      selector:
+        text:

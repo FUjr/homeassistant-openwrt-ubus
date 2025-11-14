@@ -35,7 +35,7 @@ from .const import (
     PLATFORMS,
     WIRELESS_SOFTWARES,
 )
-from .extended_ubus import ExtendedUbus
+from .extended_ubus import ExtendedUbusasync_setup_entry
 from .shared_data_manager import SharedUbusDataManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -113,6 +113,66 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Create shared data manager
         data_manager = SharedUbusDataManager(hass, entry)
         hass.data[DOMAIN][f"data_manager_{entry.entry_id}"] = data_manager
+                # Register UCI services once per integration domain
+        if not hass.data[DOMAIN].get("uci_services_registered"):
+            hass.data[DOMAIN]["uci_services_registered"] = True
+
+            async def async_handle_uci_get(call):
+                """Handle openwrt_ubus.uci_get service."""
+                config = call.data["config"]
+                section = call.data.get("section")
+                option = call.data.get("option")
+
+                # Pick the first available data manager (single-router setup)
+                shared_manager = None
+                for key, value in hass.data[DOMAIN].items():
+                    if key.startswith("data_manager_"):
+                        shared_manager = value
+                        break
+
+                if shared_manager is None:
+                    _LOGGER.error("No SharedUbusDataManager available for uci_get")
+                    return
+
+                # Get an ExtendedUbus client and call UCI
+                client = await shared_manager._get_ubus_client()  # type: ignore[attr-defined]
+                result = await client.uci_get_option(config, section, option)
+                _LOGGER.debug("UCI get %s/%s/%s -> %s", config, section, option, result)
+
+            async def async_handle_uci_set_commit(call):
+                """Handle openwrt_ubus.uci_set_commit service."""
+                config = call.data["config"]
+                section = call.data["section"]
+                option = call.data["option"]
+                value = str(call.data["value"])
+
+                shared_manager = None
+                for key, value_dm in hass.data[DOMAIN].items():
+                    if key.startswith("data_manager_"):
+                        shared_manager = value_dm
+                        break
+
+                if shared_manager is None:
+                    _LOGGER.error("No SharedUbusDataManager available for uci_set_commit")
+                    return
+
+                client = await shared_manager._get_ubus_client()  # type: ignore[attr-defined]
+                await client.uci_set_option(config, section, option, value)
+                await client.uci_commit_config(config)
+                _LOGGER.debug("UCI set+commit %s/%s %s=%r", config, section, option, value)
+
+            hass.services.async_register(
+                DOMAIN,
+                "uci_get",
+                async_handle_uci_get,
+            )
+
+            hass.services.async_register(
+                DOMAIN,
+                "uci_set_commit",
+                async_handle_uci_set_commit,
+            )
+
 
     except Exception as exc:
         raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {entry.data[CONF_HOST]}: {exc}") from exc
