@@ -35,7 +35,7 @@ from .const import (
     PLATFORMS,
     WIRELESS_SOFTWARES,
 )
-from .extended_ubus import ExtendedUbusasync_setup_entry
+from .extended_ubus import ExtendedUbus
 from .shared_data_manager import SharedUbusDataManager
 
 _LOGGER = logging.getLogger(__name__)
