@@ -122,8 +122,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 config = call.data["config"]
                 section = call.data.get("section")
                 option = call.data.get("option")
+                target_entity_id = call.data.get("target_entity_id")
 
-                # Pick the first available data manager (single-router setup)
+                # Find a SharedUbusDataManager (single-router assumption)
                 shared_manager = None
                 for key, value in hass.data[DOMAIN].items():
                     if key.startswith("data_manager_"):
@@ -134,10 +135,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     _LOGGER.error("No SharedUbusDataManager available for uci_get")
                     return
 
-                # Get an ExtendedUbus client and call UCI
+                # Use the data manager to obtain a connected ExtendedUbus client
                 client = await shared_manager._get_ubus_client()  # type: ignore[attr-defined]
+
+                # Call UCI get
                 result = await client.uci_get_option(config, section, option)
                 _LOGGER.debug("UCI get %s/%s/%s -> %s", config, section, option, result)
+
+                # Try to extract the value from ubus result structure:
+                # {"result": [0, {"values": {"enabled": "1", ...}}]}
+                value = None
+                try:
+                    res_list = result.get("result", [])
+                    if len(res_list) >= 2:
+                        values_dict = res_list[1].get("values", {})
+                        if option is not None:
+                            value = values_dict.get(option)
+                        elif values_dict:
+                            # if no option specified, grab first value
+                            value = next(iter(values_dict.values()))
+                except Exception as exc:
+                    _LOGGER.warning("Failed to parse UCI get result: %s", exc)
+
+                if target_entity_id and value is not None:
+                    _LOGGER.debug(
+                        "Setting state of %s to %r from UCI %s/%s/%s",
+                        target_entity_id,
+                        value,
+                        config,
+                        section,
+                        option,
+                    )
+                    # This creates or updates the entity state in HA
+                    hass.states.async_set(target_entity_id, value)
+                elif target_entity_id:
+                    _LOGGER.warning(
+                        "UCI get for %s/%s/%s returned no value; not updating %s",
+                        config,
+                        section,
+                        option,
+                        target_entity_id,
+                    )
 
             async def async_handle_uci_set_commit(call):
                 """Handle openwrt_ubus.uci_set_commit service."""

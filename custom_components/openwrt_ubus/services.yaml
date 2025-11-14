@@ -8,7 +8,7 @@ scan_devices:
       integration: openwrt_ubus
 uci_get:
   name: UCI get
-  description: Read a UCI value via ubus on the OpenWrt router
+  description: Read a UCI value via ubus on the OpenWrt router and optionally write it to a sensor
   fields:
     config:
       name: Config
@@ -31,6 +31,14 @@ uci_get:
       required: false
       selector:
         text:
+    target_entity_id:
+      name: Target entity ID
+      description: Sensor or entity ID to store the retrieved value in (e.g. sensor.block_user_7085c2_enabled)
+      required: false
+      example: sensor.block_user_7085c2_enabled
+      selector:
+        entity:
+          domain: sensor
 uci_set_commit:
   name: UCI set + commit
   description: Set a UCI option value and commit the change
