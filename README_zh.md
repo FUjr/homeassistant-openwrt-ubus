@@ -390,89 +390,123 @@ EOF
 
 ---
 
-### 🔧 高级配置
+### 🔧 UCI 配置控制（高级）
 
-#### 超时设置
-- **系统传感器超时**：等待系统数据的时间（5-300秒）
-- **QModem 超时**：LTE/4G 调制解调器查询超时（5-300秒）
-- **服务超时**：服务控制操作超时（5-300秒）
+集成还通过两个 Home Assistant 服务提供对 OpenWrt UCI 配置选项的直接控制。这支持高级用例，例如按设备互联网开关、动态防火墙规则和运行时配置更改 - 全部由 Home Assistant 驱动。
 
-#### 性能优化
-- **批量 API 调用**：为效率组合多个 ubus 调用
-- **智能缓存**：减少冗余 API 调用
-- **可配置轮询**：调整每种传感器类型的更新频率
-- **后台处理**：非阻塞操作以获得更好的性能
+#### `openwrt_ubus.uci_get`
 
-#### 软件兼容性
-- **无线选项**：根据您的设置在 `iwinfo` 和 `hostapd` 之间选择
-- **DHCP 选项**：支持 `dnsmasq`、`odhcpd` 或禁用 DHCP 监控
-- **灵活配置**：适应不同的 OpenWrt 配置
+通过 ubus 读取 UCI 选项值，并可选择将结果存储在 Home Assistant 传感器实体中。
 
-## 🔧 故障排除
+**字段：**
 
-### 常见问题 ⚠️
+| 字段 | 必需 | 描述 |
+|------|------|------|
+| `config` | ✓ | UCI 配置名称（例如 `firewall`、`wireless`、`dhcp`） |
+| `section` | 可选 | 部分名称或类型/索引（例如 `block_user_7085c2` 或 `@rule[3]`） |
+| `option` | 可选 | 要检索的选项键（例如 `enabled`） |
+| `target_entity_id` | 可选 | 要更新的传感器实体 ID（例如 `sensor.block_user_7085c2_enabled`） |
 
-**🚫 无法连接到路由器**
-- ✅ 验证路由器 IP 地址和凭据
-- ✅ 确保 OpenWrt 上的 `rpcd` 和 `uhttpd` 服务正在运行
-- ✅ 检查防火墙设置是否允许 HTTP 访问 ubus
-
-**❌ 未检测到设备**
-- ✅ 验证无线和 DHCP 软件设置是否与您的 OpenWrt 配置匹配
-- ✅ 检查路由器上是否正确配置了所选的监控方法
-
-**⏰ 传感器未更新**
-- ✅ 检查 Home Assistant 日志中的连接错误
-- ✅ 验证路由器权限允许访问系统信息
-
-**🏷️ 设备显示 MAC 地址而不是主机名**
-- ✅ 确保主机名解析 ACL 配置正确（请参阅 [主机名解析配置](#主机名解析配置-🏷️)）
-- ✅ 验证 DHCP 租约文件可访问：`/var/dhcp.leases` 或 `/tmp/dhcp.leases`
-- ✅ 检查 rpcd 服务在 ACL 配置后已重启
-- ✅ 确认用户账户分配到正确的 ACL 组
-
-### 调试日志 �
-
-添加到您的 `configuration.yaml`：
+**示例：将防火墙规则状态存储到传感器**
 
 ```yaml
-logger:
-  logs:
-    custom_components.openwrt_ubus: debug
-    homeassistant.components.device_tracker: debug
+service: openwrt_ubus.uci_get
+data:
+  config: firewall
+  section: block_user_7085c2
+  option: enabled
+  target_entity_id: sensor.block_user_7085c2_enabled
 ```
 
-## 👨‍💻 开发
+提供 `target_entity_id` 时，集成将使用检索到的 UCI 值（例如 `"0"` 或 `"1"`）更新该实体的状态。
 
-### 项目结构 📁
+#### `openwrt_ubus.uci_set_commit`
+
+设置 UCI 选项值并立即提交更改。
+
+**字段：**
+
+| 字段 | 必需 | 描述 |
+|------|------|------|
+| `config` | ✓ | UCI 配置名称 |
+| `section` | ✓ | 部分名称或类型/索引 |
+| `option` | ✓ | 要修改的选项键 |
+| `value` | ✓ | 新值（字符串） |
+
+**示例：启用防火墙规则（阻止 MAC 地址）**
+
+```yaml
+service: openwrt_ubus.uci_set_commit
+data:
+  config: firewall
+  section: block_user_7085c2
+  option: enabled
+  value: "1"
 ```
-custom_components/openwrt_ubus/
-├── __init__.py              # 主集成设置
-├── config_flow.py           # 配置流程
-├── const.py                 # 常量和配置
-├── device_tracker.py        # 设备跟踪平台
-├── sensor.py               # 传感器平台协调器
-├── switch.py               # 服务控制开关
-├── button.py               # 服务控制按钮和设备踢出协调
-├── extended_ubus.py        # 增强的 ubus 客户端，支持批量 API 和 hostapd
-├── shared_data_manager.py  # 共享数据管理和优化
-├── manifest.json           # 集成清单
-├── strings.json            # UI 字符串
-├── services.yaml           # 服务定义
-├── Ubus/                   # Ubus 通信库
-│   ├── __init__.py
-│   ├── const.py
-│   └── interface.py
-├── buttons/                # 按钮实体模块
-│   ├── __init__.py
-│   ├── service_button.py   # 服务控制按钮
-│   └── device_kick_button.py # 设备踢出功能
-├── sensors/                # 各个传感器模块
-│   ├── __init__.py
-│   ├── system_sensor.py    # 系统信息传感器
-│   ├── qmodem_sensor.py    # QModem/LTE 传感器
-│   ├── sta_sensor.py       # 无线站点传感器
-│   └── ap_sensor.py        # 接入点传感器
+
+**示例：禁用防火墙规则（取消阻止）**
+
+```yaml
+service: openwrt_ubus.uci_set_commit
+data:
+  config: firewall
+  section: block_user_7085c2
+  option: enabled
+  value: "0"
+```
+
+#### 示例：使用防火墙规则创建按设备互联网开关
+
+您可以将 UCI 服务与简单的自动化和模板开关相结合，创建使用基于 MAC 的防火墙规则的按设备互联网开关。
+
+**1. 自动化以保持传感器与防火墙规则同步**
+
+```yaml
+automation:
+  - alias: "Sync firewall state for user 7085C2"
+    trigger:
+      - platform: time_pattern
+        minutes: "/1"
+    action:
+      - service: openwrt_ubus.uci_get
+        data:
+          config: firewall
+          section: block_user_7085c2
+          option: enabled
+          target_entity_id: sensor.block_user_7085c2_enabled
+```
+
+**2. 使用 UCI 支持的传感器作为状态和 UCI 调用作为操作的模板开关**
+
+```yaml
+switch:
+  - platform: template
+    switches:
+      user_7085c2_internet:
+        friendly_name: "User Internet 70:85:C2:89:EC:74"
+        # ON = 防火墙规则禁用 (0) = 互联网已允许
+        value_template: >
+          {{ is_state('sensor.block_user_7085c2_enabled', '0') }}
+        turn_on:
+          - service: openwrt_ubus.uci_set_commit
+            data:
+              config: firewall
+              section: block_user_7085c2
+              option: enabled
+              value: "0"
+        turn_off:
+          - service: openwrt_ubus.uci_set_commit
+            data:
+              config: firewall
+              section: block_user_7085c2
+              option: enabled
+              value: "1"
+```
+
+此模式可以通过调整 `section`、`sensor` 和 `switch` 名称来重复使用以添加其他防火墙规则和设备。
+
+> **注意：** UCI 服务要求为此集成配置的 OpenWrt RPC 用户具有 ubus 权限来调用 `uci get`、`uci set` 和 `uci commit`。
+
 ---
 
 ### 🔧 高级配置与优化
@@ -514,6 +548,127 @@ custom_components/openwrt_ubus/
 - ✅ 确保 `rpcd` 和 `uhttpd` 服务正在运行：`service rpcd status && service uhttpd status`
 - ✅ 检查防火墙设置是否允许 HTTP 访问 ubus（端口 80/443）
 - ✅ 测试连接性：`curl http://router_ip/ubus -d '{"jsonrpc":"2.0","method":"call","params":["00000000000000000000000000000000","session","login",{"username":"root","password":"your_password"}],"id":1}'`
+
+**❌ 未检测到设备**
+- ✅ 验证无线软件设置与您的 OpenWrt 配置匹配
+- ✅ 检查 DHCP 软件设置是否对应您的 DHCP 服务器
+- ✅ 确保路由器上正确配置了所选的监控方法
+- ✅ 测试无线检测：`iwinfo` 或检查 hostapd 状态：`ubus call hostapd.wlan0 get_clients`
+- ✅ 验证 DHCP 租约文件可访问性：`ls -la /var/dhcp.leases /tmp/dhcp.leases`
+
+**⏰ 传感器未更新**
+- ✅ 检查 Home Assistant 日志中的连接错误：`设置 → 系统 → 日志`
+- ✅ 验证路由器权限允许访问系统信息
+- ✅ 测试系统数据访问：`ubus call system info && ubus call system board`
+- ✅ 检查 Home Assistant 和路由器之间的网络连接稳定性
+- ✅ 查看集成配置中的超时设置
+
+**🏷️ 设备显示 MAC 地址而不是主机名**
+- ✅ 确保主机名解析 ACL 配置正确（请参阅 [路由器权限设置](#路由器权限设置-🔐)）
+- ✅ 验证 DHCP 租约文件可访问：`/var/dhcp.leases` 或 `/tmp/dhcp.leases`
+- ✅ 检查 rpcd 服务在 ACL 配置后已重启：`/etc/init.d/rpcd restart`
+- ✅ 确认用户账户分配到正确的 ACL 组
+- ✅ 测试文件访问：`ubus call file read '{"path":"/tmp/dhcp.leases"}'`
+
+**🚫 设备踢出按钮不工作**
+- ✅ 验证 hostapd 已安装并运行：`service hostapd status`
+- ✅ 检查 hostapd ubus 集成：`ubus list | grep hostapd`
+- ✅ 确保在集成配置中启用了设备踢出按钮
+- ✅ 确认目标设备通过 hostapd 管理的接口连接
+- ✅ 测试 hostapd 控制：`ubus call hostapd.wlan0 del_client '{"addr":"device_mac","reason":5,"deauth":true,"ban_time":60000}'`
+
+### 调试日志与诊断 🐛
+
+启用全面的故障排除日志记录：
+
+```yaml
+# 添加到 configuration.yaml
+logger:
+  default: warning
+  logs:
+    custom_components.openwrt_ubus: debug
+    custom_components.openwrt_ubus.extended_ubus: debug
+    custom_components.openwrt_ubus.shared_data_manager: debug
+    homeassistant.components.device_tracker: debug
+```
+
+**日志分析技巧：**
+- **连接问题**：查找 "Failed to connect" 或 "Timeout" 消息
+- **认证问题**：搜索 "401" 或 "authentication failed" 错误
+- **设备检测**：检查 "No devices found" 或解析错误
+- **服务控制**：监控 "Service operation failed" 消息
+
+### 性能监控 📊
+
+使用内置指标监控集成性能：
+- **API 响应时间**：检查日志中的慢 ubus 调用（>5秒）
+- **更新间隔**：验证传感器在预期时间框架内更新
+- **错误率**：监控重复发生的连接或解析错误
+- **内存使用**：确保 Home Assistant 内存保持稳定
+
+## 👨‍💻 开发与架构
+
+### 项目结构 📁
+```
+custom_components/openwrt_ubus/
+├── __init__.py              # 主集成设置和协调器管理
+├── config_flow.py           # 用户配置流程和验证
+├── const.py                 # 常量、默认值和配置架构
+├── device_tracker.py        # 设备跟踪平台实现
+├── sensor.py               # 传感器平台协调器和实体管理
+├── switch.py               # 具有实时状态的服务控制开关
+├── button.py               # 服务控制和设备踢出按钮协调
+├── extended_ubus.py        # 增强的 ubus 客户端，支持批量 API 和 hostapd
+├── shared_data_manager.py  # 集中数据管理和缓存优化
+├── manifest.json           # 集成清单和依赖项
+├── strings.json            # UI 字符串和用户界面文本
+├── services.yaml           # 服务操作定义
+├── Ubus/                   # 核心 ubus 通信库
+│   ├── __init__.py
+│   ├── const.py           # ubus 协议常量
+│   └── interface.py       # 低级 ubus 接口实现
+├── buttons/                # 按钮实体模块
+│   ├── __init__.py
+│   ├── service_button.py   # 服务控制按钮（启动/停止/重启/启用/禁用）
+│   └── device_kick_button.py # 设备踢出功能与 hostapd 集成
+├── sensors/                # 各个传感器平台模块
+│   ├── __init__.py
+│   ├── system_sensor.py    # 系统信息传感器（运行时间、内存、负载）
+│   ├── qmodem_sensor.py    # QModem/LTE 传感器（信号、连接、数据）
+│   ├── sta_sensor.py       # 无线站点传感器（每设备指标）
+│   └── ap_sensor.py        # 接入点传感器（接口状态）
+└── translations/           # 多语言支持的本地化文件
+    ├── en.json            # 英文翻译
+    └── zh.json            # 中文翻译
+```
+
+### 集成架构 🏗️
+
+**数据流架构：**
+1. **SharedDataUpdateCoordinator**：具有批量 API 优化的中央数据管理
+2. **ExtendedUbus**：增强的 ubus 客户端，集成 hostapd 和错误处理
+3. **平台模块**：专门的传感器/实体实现
+4. **缓存层**：具有失效策略的智能缓存
+
+**关键设计模式：**
+- **协调器模式**：具有实体订阅的集中数据更新
+- **工厂模式**：基于检测到的设备/服务的动态实体创建
+- **观察者模式**：使用最少 API 调用的实时更新
+- **策略模式**：可配置的无线/DHCP 检测方法
+
+### 贡献指南 🤝
+
+1. **🍴 Fork 仓库**：创建您自己的开发 fork
+2. **🌿 创建功能分支**：使用描述性分支名称（`feature/device-kick-improvements`）
+3. **✏️ 代码质量**：遵循 Home Assistant 开发指南
+4. **🧪 彻底测试**：使用各种 OpenWrt 配置进行测试
+5. **📝 记录更改**：更新 README 和代码注释
+6. **📤 提交 Pull Request**：提供详细的更改描述
+
+**开发设置：**
+- 使用多个 OpenWrt 版本测试（21.02、22.03、snapshot）
+- 验证与不同无线驱动程序的兼容性（ath9k、ath10k、mt76）
+- 测试各种硬件平台（MIPS、ARM、x86）
 
 **❌ 未检测到设备**
 - ✅ 验证无线软件设置与您的 OpenWrt 配置匹配
