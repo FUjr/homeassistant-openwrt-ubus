@@ -337,6 +337,125 @@ Essential OpenWrt system services managed by procd:
 
 ---
 
+### 🔧 UCI Configuration Control (Advanced)
+
+The integration also provides direct control over OpenWrt UCI configuration options via two Home Assistant services. This enables advanced use cases such as per-device internet toggles, dynamic firewall rules, and runtime configuration changes – all driven from Home Assistant.
+
+#### `openwrt_ubus.uci_get`
+
+Reads a UCI option value through ubus and can optionally store the result in a Home Assistant sensor entity.
+
+**Fields:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `config` | ✓ | UCI config name (e.g. `firewall`, `wireless`, `dhcp`) |
+| `section` | optional | Section name or type/index (e.g. `block_user_7085c2` or `@rule[3]`) |
+| `option` | optional | Option key to retrieve (e.g. `enabled`) |
+| `target_entity_id` | optional | Sensor entity ID to update with the result (e.g. `sensor.block_user_7085c2_enabled`) |
+
+**Example: store firewall rule status into a sensor**
+
+```yaml
+service: openwrt_ubus.uci_get
+data:
+  config: firewall
+  section: block_user_7085c2
+  option: enabled
+  target_entity_id: sensor.block_user_7085c2_enabled
+```
+
+When `target_entity_id` is provided, the integration will update that entity's state with the retrieved UCI value (for example, `"0"` or `"1"`).
+
+#### `openwrt_ubus.uci_set_commit`
+
+Sets a UCI option value and immediately commits the change.
+
+**Fields:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `config` | ✓ | UCI config name |
+| `section` | ✓ | Section name or type/index |
+| `option` | ✓ | Option key to modify |
+| `value` | ✓ | New value (string) |
+
+**Example: enable a firewall rule (block a MAC address)**
+
+```yaml
+service: openwrt_ubus.uci_set_commit
+data:
+  config: firewall
+  section: block_user_7085c2
+  option: enabled
+  value: "1"
+```
+
+**Example: disable the firewall rule (unblock)**
+
+```yaml
+service: openwrt_ubus.uci_set_commit
+data:
+  config: firewall
+  section: block_user_7085c2
+  option: enabled
+  value: "0"
+```
+
+#### Example: Per-device Internet Toggle Using a Firewall Rule
+
+You can combine the UCI services with a simple automation and template switch to create a per-device internet kill switch that uses a MAC-based firewall rule.
+
+**1. Automation to keep sensor in sync with the firewall rule**
+
+```yaml
+automation:
+  - alias: "Sync firewall state for user 7085C2"
+    trigger:
+      - platform: time_pattern
+        minutes: "/1"
+    action:
+      - service: openwrt_ubus.uci_get
+        data:
+          config: firewall
+          section: block_user_7085c2
+          option: enabled
+          target_entity_id: sensor.block_user_7085c2_enabled
+```
+
+**2. Template switch that uses the UCI-backed sensor for state and UCI calls for actions**
+
+```yaml
+switch:
+  - platform: template
+    switches:
+      user_7085c2_internet:
+        friendly_name: "User Internet 70:85:C2:89:EC:74"
+        # ON = firewall rule disabled (0) = internet allowed
+        value_template: >
+          {{ is_state('sensor.block_user_7085c2_enabled', '0') }}
+        turn_on:
+          - service: openwrt_ubus.uci_set_commit
+            data:
+              config: firewall
+              section: block_user_7085c2
+              option: enabled
+              value: "0"
+        turn_off:
+          - service: openwrt_ubus.uci_set_commit
+            data:
+              config: firewall
+              section: block_user_7085c2
+              option: enabled
+              value: "1"
+```
+
+This pattern can be reused for additional firewall rules and devices by adjusting the `section`, `sensor` and `switch` names.
+
+> **Note:** The UCI services require that the OpenWrt RPC user configured for this integration has ubus permissions to call `uci get`, `uci set` and `uci commit`.
+
+---
+
 ### 🚫 Advanced Device Management & Control
 
 Advanced device management capabilities including the ability to disconnect unwanted devices from your wireless network.
