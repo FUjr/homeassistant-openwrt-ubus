@@ -182,7 +182,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 config = call.data["config"]
                 section = call.data["section"]
                 option = call.data["option"]
-                value = str(call.data["value"])
+                value = call.data["value"]
+                services_to_restart = call.data.get("service")
 
                 shared_manager = None
                 for key, value_dm in hass.data[DOMAIN].items():
@@ -195,9 +196,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     return
 
                 client = await shared_manager._get_ubus_client()  # type: ignore[attr-defined]
+                
+                # Set and commit the UCI value
                 await client.uci_set_option(config, section, option, value)
                 await client.uci_commit_config(config)
                 _LOGGER.debug("UCI set+commit %s/%s %s=%r", config, section, option, value)
+                
+                # Restart services if specified
+                if services_to_restart:
+                    # Handle both string and list inputs
+                    service_list = (
+                        services_to_restart
+                        if isinstance(services_to_restart, list)
+                        else [services_to_restart]
+                    )
+                    for service_name in service_list:
+                        try:
+                            result = await client.service_action(service_name, "restart")
+                            _LOGGER.info(
+                                "Restarted service %s after UCI change: %s",
+                                service_name,
+                                result,
+                            )
+                        except Exception as exc:
+                            _LOGGER.warning(
+                                "Failed to restart service %s: %s", service_name, exc
+                            )
 
             hass.services.async_register(
                 DOMAIN,

@@ -272,8 +272,21 @@ class ExtendedUbus(Ubus):
             params,
         )
 
-    async def uci_set_option(self, config: str, section: str, option: str, value: str):
-        """Set a specific UCI option value."""
+    async def uci_set_option(self, config: str, section: str, option: str, value):
+        """Set a specific UCI option value.
+
+        Args:
+            config: UCI config name (e.g., "firewall")
+            section: Section name or type/index
+            option: Option key to set
+            value: Option value - may be a string or list of strings for UCI list-type options.
+                   Lists are passed through as JSON arrays to ubus.
+
+        Note:
+            Call `uci_commit_config()` after calling this method to write changes to disk.
+            Consider calling `service_action()` to restart affected services (e.g., restart
+            "dnsmasq" after changing DHCP configuration, or "network" after interface changes).
+        """
         params = {
             "config": config,
             "section": section,

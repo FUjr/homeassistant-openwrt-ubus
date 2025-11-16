@@ -66,8 +66,15 @@ uci_set_commit:
         text:
     value:
       name: Value
-      description: Option value (e.g. "0" or "1")
+      description: Option value - string or JSON array for list-type options (e.g. "0", "1", or ["192.168.1.1", "8.8.8.8"])
       required: true
       example: "0"
+      selector:
+        text:
+    service:
+      name: Service
+      description: Optional service name(s) to restart after UCI commit (e.g. "dnsmasq" or ["firewall", "network"]). If provided, specified services will be restarted to apply configuration changes.
+      required: false
+      example: dnsmasq
       selector:
         text:
