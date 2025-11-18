@@ -205,6 +205,16 @@ async def async_setup_entry(
                 button_id = f"{host}_{mac.replace(':', '_')}"
             current_devices.add(button_id)
 
+            # Create button if it doesn't exist (regardless of current availability)
+            if button_id not in created_buttons:
+                # Create hostapd interface name
+                # Don't add "hostapd." prefix if already present (when using hostapd wireless_software)
+                if ap_device.startswith("hostapd."):
+                    hostapd_interface = ap_device
+                else:
+                    hostapd_interface = f"hostapd.{ap_device}"
+                
+                # Create new kick button
             # Get SSID for user-friendly naming
             ap_ssid = device_info.get("ap_ssid", ap_device)
 
