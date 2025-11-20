@@ -1,9 +1,9 @@
 """Extended Ubus client with specific OpenWrt functionality."""
 
-import json
 import logging
 
 from .Ubus import Ubus
+from .Ubus.interface import PreparedCall
 from .const import (
     API_RPC_CALL,
     API_RPC_LIST,
@@ -27,7 +27,6 @@ from .const import (
     API_METHOD_GET_QMODEM,
     API_METHOD_INFO,
     API_METHOD_READ,
-    API_METHOD_REBOOT,
     API_METHOD_DEL_CLIENT,
     API_METHOD_LIST,
     API_METHOD_INIT,
@@ -40,12 +39,13 @@ _LOGGER = logging.getLogger(__name__)
 
 class ExtendedUbus(Ubus):
     """Extended Ubus client with specific OpenWrt functionality."""
+
     def __init__(
-        self,
-        host,
-        username,
-        password,
-        session,
+            self,
+            host,
+            username,
+            password,
+            session,
     ):
         super().__init__(host, username, password, session)
         self._interface_to_ssid_cache = {}  # Cache for interface->SSID mapping
@@ -64,12 +64,12 @@ class ExtendedUbus(Ubus):
                 "status",
                 {}
             )
-            
+
             if not result:
                 return {}
-            
+
             mapping = {}
-            
+
             # Parse the wireless status to build interface->SSID mapping
             for radio_name, radio_data in result.items():
                 if isinstance(radio_data, dict) and "interfaces" in radio_data:
@@ -77,19 +77,19 @@ class ExtendedUbus(Ubus):
                         ifname = interface.get("ifname")
                         config = interface.get("config", {})
                         ssid = config.get("ssid")
-                        
+
                         if ifname and ssid:
                             mapping[ifname] = ssid
                             _LOGGER.debug("Mapped interface %s to SSID %s", ifname, ssid)
-            
+
             # Cache the mapping
             self._interface_to_ssid_cache = mapping
             return mapping
-            
+
         except Exception as exc:
             _LOGGER.error("Error getting interface to SSID mapping: %s", exc)
             return {}
-    
+
     async def file_read(self, path):
         """Read file content."""
         return await self.api_call(
@@ -126,13 +126,13 @@ class ExtendedUbus(Ubus):
             result = await self.file_read("/etc/ethers")
             if not result or "data" not in result:
                 return {}
-            
+
             mapping = {}
             for line in result["data"].splitlines():
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
-                
+
                 parts = line.split()
                 if len(parts) >= 2:
                     mac = parts[0].upper()
@@ -142,9 +142,9 @@ class ExtendedUbus(Ubus):
                         "ip": hostname  # Use hostname as fallback for IP field
                     }
                     _LOGGER.debug("Added ethers mapping: %s -> %s", mac, hostname)
-            
+
             return mapping
-            
+
         except Exception as exc:
             _LOGGER.debug("Error reading /etc/ethers: %s", exc)
             return {}
@@ -242,10 +242,6 @@ class ExtendedUbus(Ubus):
         """Get hostapd data."""
         return await self.api_call(API_RPC_LIST, API_SUBSYS_HOSTAPD)
 
-    async def get_hostapd_clients(self, hostapd):
-        """Get hostapd clients."""
-        return await self.api_call(API_RPC_CALL, hostapd, API_METHOD_GET_CLIENTS)
-
     async def get_uci_config(self, _config, _type):
         """Get UCI config."""
         return await self.api_call(
@@ -337,26 +333,10 @@ class ExtendedUbus(Ubus):
         """Kernel system statistics."""
         return await self.file_read("/proc/stat")
 
-    async def system_reboot(self):
-        """System reboot."""
-        return await self.get_system_method(API_METHOD_REBOOT)
-
     # iwinfo specific methods
     async def get_ap_devices(self):
         """Get access point devices."""
         return await self.api_call(API_RPC_CALL, API_SUBSYS_IWINFO, API_METHOD_GET_AP)
-
-    async def get_sta_devices(self, ap_device):
-        """Get station devices."""
-        return await self.api_call(API_RPC_CALL, API_SUBSYS_IWINFO, API_METHOD_GET_STA, {"device": ap_device})
-
-    async def get_sta_statistics(self, ap_device):
-        """Get detailed station statistics for all connected devices."""
-        return await self.api_call(API_RPC_CALL, API_SUBSYS_IWINFO, API_METHOD_GET_STA, {"device": ap_device})
-
-    async def get_ap_info(self, ap_device):
-        """Get detailed access point information."""
-        return await self.api_call(API_RPC_CALL, API_SUBSYS_IWINFO, API_METHOD_INFO, {"device": ap_device})
 
     async def get_root_partition_info(self):
         """Get root partition information (total, free, used, avail in MB)."""
@@ -477,134 +457,106 @@ class ExtendedUbus(Ubus):
                 sta_statistics[mac] = device
         return sta_statistics
 
-    def parse_hostapd_ap_devices(self, result):
-        """Parse access point devices from hostapd ubus result."""
-        return result
-
-    async def get_all_sta_data_batch(self, ap_devices, is_hostapd=False):
+    async def get_all_sta_data_batch(self, ap_devices: list[str], is_hostapd=False):
         """Get station data for all AP devices using batch call."""
         if not ap_devices:
             return {}
 
         # Build API calls for all AP devices
-        rpcs = []
-        for i, ap_device in enumerate(ap_devices):
+        prepared_calls: list[PreparedCall] = []
+        for ap_device in ap_devices:
             if is_hostapd:
                 # For hostapd, ap_device is the hostapd interface name
-                api_call = json.loads(self.build_api(
-                    API_RPC_CALL,
-                    ap_device,
-                    API_METHOD_GET_CLIENTS
-                ))
+                api_call = PreparedCall(
+                    rpc_method=API_RPC_CALL,
+                    subsystem=ap_device,
+                    method=API_METHOD_GET_CLIENTS,
+                    params=None,
+                    rpc_id=ap_device,
+                )
             else:
                 # For iwinfo, ap_device is the wireless interface name
-                api_call = json.loads(self.build_api(
-                    API_RPC_CALL,
-                    API_SUBSYS_IWINFO,
-                    API_METHOD_GET_STA,
-                    {"device": ap_device}
-                ))
-            api_call["id"] = i  # Use index as ID to match responses
-            rpcs.append(api_call)
+                api_call = PreparedCall(
+                    rpc_method=API_RPC_CALL,
+                    subsystem=API_SUBSYS_IWINFO,
+                    method=API_METHOD_GET_STA,
+                    params={"device": ap_device},
+                    rpc_id=ap_device,
+                )
+            prepared_calls.append(api_call)
 
         # Execute batch call
-        results = await self.batch_call(rpcs)
+        results = await self.batch_call(prepared_calls)
         if not results:
             return {}
 
         # Process results
         sta_data = {}
-
-        # Handle both list and dict formats for ap_devices
-        if isinstance(ap_devices, list):
-            ap_device_list = ap_devices
-        elif isinstance(ap_devices, dict):
-            ap_device_list = list(ap_devices.keys())
-        else:
-            _LOGGER.error("Unexpected ap_devices type: %s", type(ap_devices).__name__)
-            return {}
-
-        for i, result in enumerate(results):
-            # ignore if out of bounds. there has been a new connection?
-            if i >= len(ap_device_list):
-                continue
-            ap_device = ap_device_list[i]
-
+        for ap_device, result in results:
             try:
-                # ap_device is already set from ap_device_list[i] above
-
-                # Handle different response formats
-                if "result" in result:
-                    sta_result = result["result"][1] if len(result["result"]) > 1 else None
-                elif "error" in result:
-                    _LOGGER.debug("Error in batch call for %s: %s", ap_device, result["error"])
-                    continue
-                else:
-                    _LOGGER.debug("Unexpected result format for %s: %s", ap_device, result)
-                    continue
-
-                if sta_result:
+                if isinstance(result, dict) and result:
                     if is_hostapd:
                         sta_data[ap_device] = {
-                            'devices': self.parse_hostapd_sta_devices(sta_result),
-                            'statistics': self.parse_hostapd_sta_statistics(sta_result)
+                            'devices': self.parse_hostapd_sta_devices(result),
+                            'statistics': self.parse_hostapd_sta_statistics(result)
                         }
                     else:
                         sta_data[ap_device] = {
-                            'devices': self.parse_sta_devices(sta_result),
-                            'statistics': self.parse_sta_statistics(sta_result)
+                            'devices': self.parse_sta_devices(result),
+                            'statistics': self.parse_sta_statistics(result)
                         }
+                elif isinstance(result, Exception):
+                    _LOGGER.error("Exception in batch call for %s: %s", ap_device, result)
+                    continue
+                else:
+                    _LOGGER.debug("Unexpected result type for %s: %s", ap_device, type(result))
+                    continue
             except (IndexError, KeyError) as exc:
                 _LOGGER.debug("Error parsing sta data index %s: %s", ap_device, exc)
         return sta_data
 
-    async def get_all_ap_info_batch(self, ap_devices):
+    async def get_all_ap_info_batch(self, ap_devices: list[str]):
         """Get AP info for all AP devices using batch call."""
         if not ap_devices:
             return {}
 
         # Build API calls for all AP devices
-        rpcs = []
-        for i, ap_device in enumerate(ap_devices):
-            api_call = json.loads(self.build_api(
-                API_RPC_CALL,
-                API_SUBSYS_IWINFO,
-                API_METHOD_INFO,
-                {"device": ap_device}
-            ))
-            api_call["id"] = i  # Use index as ID to match responses
-            rpcs.append(api_call)
+        prepared_calls: list[PreparedCall] = []
+        for ap_device in ap_devices:
+            prepared_calls.append(
+                PreparedCall(
+                    rpc_method=API_RPC_CALL,
+                    subsystem=API_SUBSYS_IWINFO,
+                    method=API_METHOD_INFO,
+                    params={"device": ap_device},
+                    rpc_id=ap_device,
+                )
+            )
 
         # Execute batch call
-        results = await self.batch_call(rpcs)
+        results = await self.batch_call(prepared_calls)
         if not results:
             return {}
 
         # Process results
         ap_info_data = {}
-        for i, result in enumerate(results):
-            if i < len(ap_devices):
-                ap_device = ap_devices[i]
-                try:
-                    # Handle different response formats
-                    if "result" in result:
-                        ap_result = result["result"][1] if len(result["result"]) > 1 else None
-                    elif "error" in result:
-                        _LOGGER.debug("Error in batch call for AP %s: %s", ap_device, result["error"])
-                        continue
+        for ap_device, result in results:
+            try:
+                if isinstance(result, dict) and result:
+                    # Only add AP if it has an SSID
+                    if (ap_info := self.parse_ap_info(result, ap_device)) and ap_info.get("ssid"):
+                        ap_info_data[ap_device] = ap_info
+                        _LOGGER.debug("AP info fetched for device %s with SSID %s", ap_device, ap_info.get("ssid"))
                     else:
-                        continue
-
-                    if ap_result:
-                        ap_info = self.parse_ap_info(ap_result, ap_device)
-                        # Only add AP if it has an SSID
-                        if ap_info and ap_info.get("ssid"):
-                            ap_info_data[ap_device] = ap_info
-                            _LOGGER.debug("AP info fetched for device %s with SSID %s", ap_device, ap_info.get("ssid"))
-                        else:
-                            _LOGGER.debug("Skipping AP device %s - no SSID found", ap_device)
-                except (IndexError, KeyError) as exc:
-                    _LOGGER.debug("Error parsing AP info for %s: %s", ap_device, exc)
+                        _LOGGER.debug("Skipping AP device %s - no SSID found", ap_device)
+                elif isinstance(result, Exception):
+                    _LOGGER.error("Exception in batch call for %s: %s", ap_device, result)
+                    continue
+                else:
+                    _LOGGER.debug("Unexpected result type for %s: %s", ap_device, type(result))
+                    continue
+            except (IndexError, KeyError) as exc:
+                _LOGGER.debug("Error parsing AP info for %s: %s", ap_device, exc)
 
         return ap_info_data
 
@@ -625,52 +577,46 @@ class ExtendedUbus(Ubus):
 
         # Build batch calls for each service status
         services_with_status = {}
-        status_rpcs = []
-        service_names = []
+        prepared_calls: list[PreparedCall] = []
 
         for service_name in service_list_result:
-            service_names.append(service_name)
             # Use "list" method with service name to get specific service status
-            status_call = json.loads(self.build_api(
-                API_RPC_CALL,
-                API_SUBSYS_RC,
-                API_METHOD_LIST,
-                {"name": service_name}
-            ))
-            status_rpcs.append(status_call)
+            prepared_calls.append(
+                PreparedCall(
+                    rpc_method=API_RPC_CALL,
+                    subsystem=API_SUBSYS_RC,
+                    method=API_METHOD_LIST,
+                    params={"name": service_name},
+                    rpc_id=service_name,
+                )
+            )
 
         # Execute batch call for all service statuses
-        if status_rpcs:
-            _LOGGER.debug("Executing batch call for %d services", len(status_rpcs))
-            status_results = await self.batch_call(status_rpcs)
-
-            if status_results:
+        if prepared_calls:
+            _LOGGER.debug("Executing batch call for %d services", len(prepared_calls))
+            if status_results := await self.batch_call(prepared_calls):
                 _LOGGER.debug("Got %d status results", len(status_results))
-                for i, result in enumerate(status_results):
-                    if i < len(service_names):
-                        service_name = service_names[i]
-                        _LOGGER.debug("Processing result %d for service %s: %s", i, service_name, result)
+                for service_name, result in status_results:
+                    _LOGGER.debug("Processing result for service %s: %s", service_name, result)
 
-                        if result and "result" in result and len(result["result"]) > 1:
-                            # Service status format: [session_id, services_dict]
-                            services_dict = result["result"][1] if len(result["result"]) > 1 else {}
-                            _LOGGER.debug("Raw services dict for %s: %s", service_name, services_dict)
+                    if isinstance(result, dict):
+                        if service_name in result:
+                            service_status = result[service_name]
+                            _LOGGER.debug("Extracted service status for %s: %s", service_name, service_status)
 
-                            # Extract the specific service from the services dict
-                            if isinstance(services_dict, dict) and service_name in services_dict:
-                                service_status = services_dict[service_name]
-                                _LOGGER.debug("Extracted service status for %s: %s", service_name, service_status)
-
-                                # Parse service status - OpenWrt RC returns different formats
-                                parsed_status = self._parse_service_status(service_status, service_name)
-                                services_with_status[service_name] = parsed_status
-                            else:
-                                _LOGGER.debug("Service %s not found in response dict, using default", service_name)
-                                services_with_status[service_name] = {"running": False, "enabled": False}
+                            # Parse service status - OpenWrt RC returns different formats
+                            parsed_status = self._parse_service_status(service_status, service_name)
+                            services_with_status[service_name] = parsed_status
                         else:
-                            # Default status if no result
-                            _LOGGER.debug("No valid result for service %s, using default", service_name)
+                            _LOGGER.debug("Service %s not found in response dict, using default", service_name)
                             services_with_status[service_name] = {"running": False, "enabled": False}
+                    elif isinstance(result, Exception):
+                        _LOGGER.error("Exception for service %s: %s, using default", service_name, result)
+                        services_with_status[service_name] = {"running": False, "enabled": False}
+                    else:
+                        _LOGGER.error("Unexpected result type for service %s: %s, using default", service_name,
+                                      type(result))
+                        services_with_status[service_name] = {"running": False, "enabled": False}
             else:
                 _LOGGER.warning("Batch call returned no results")
 
@@ -696,7 +642,7 @@ class ExtendedUbus(Ubus):
             start_priority = status_data.get("start", 0)
 
             _LOGGER.debug("Service %s: running=%s, enabled=%s, start=%s",
-                         service_name, running, enabled, start_priority)
+                          service_name, running, enabled, start_priority)
 
             result = {
                 "running": bool(running),
@@ -714,7 +660,8 @@ class ExtendedUbus(Ubus):
             return {"running": running, "enabled": running, "status": status_data}
 
         # Fallback for unexpected formats
-        _LOGGER.warning("Service %s: Unexpected status format (type %s): %s", service_name, type(status_data), status_data)
+        _LOGGER.warning("Service %s: Unexpected status format (type %s): %s", service_name, type(status_data),
+                        status_data)
         return {"running": False, "enabled": False, "raw_status": status_data}
 
     async def service_action(self, service_name, action):

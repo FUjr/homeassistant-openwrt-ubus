@@ -70,12 +70,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # Store the configuration for the device tracker
     hass.data[DOMAIN]["config"] = config[DOMAIN]
 
-    # clear session_id for reload
-    for key in list(hass.data[DOMAIN].keys()):
-        if key.startswith("data_manager_"):
-            shared_ubus_data_manager: SharedUbusDataManager = hass.data[DOMAIN][key]
-            shared_ubus_data_manager.logout()
-
     return True
 
 
@@ -95,7 +89,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {entry.data[CONF_HOST]}")
 
         # Check for modem_ctrl availability and store the result
-        modem_ctrl_available = False
         try:
             modem_ctrl_list = await ubus.list_modem_ctrl()
             modem_ctrl_available = modem_ctrl_list is not None and bool(modem_ctrl_list)
@@ -113,7 +106,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Create shared data manager
         data_manager = SharedUbusDataManager(hass, entry)
         hass.data[DOMAIN][f"data_manager_{entry.entry_id}"] = data_manager
-                # Register UCI services once per integration domain
+        # Register UCI services once per integration domain
         if not hass.data[DOMAIN].get("uci_services_registered"):
             hass.data[DOMAIN]["uci_services_registered"] = True
 
@@ -196,12 +189,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     return
 
                 client = await shared_manager._get_ubus_client()  # type: ignore[attr-defined]
-                
+
                 # Set and commit the UCI value
                 await client.uci_set_option(config, section, option, value)
                 await client.uci_commit_config(config)
                 _LOGGER.debug("UCI set+commit %s/%s %s=%r", config, section, option, value)
-                
+
                 # Restart services if specified
                 if services_to_restart:
                     # Handle both string and list inputs
@@ -366,8 +359,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Clean up shared data manager
         data_manager_key = f"data_manager_{entry.entry_id}"
         if DOMAIN in hass.data and data_manager_key in hass.data[DOMAIN]:
-            data_manager = hass.data[DOMAIN][data_manager_key]
+            data_manager: SharedUbusDataManager = hass.data[DOMAIN][data_manager_key]
             try:
+                await data_manager.logout()
                 await data_manager.close()
             except Exception as exc:
                 _LOGGER.debug("Error closing data manager: %s", exc)
