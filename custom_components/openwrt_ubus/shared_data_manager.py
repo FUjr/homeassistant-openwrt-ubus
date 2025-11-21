@@ -90,10 +90,10 @@ class SharedUbusDataManager:
         self._ubus_clients: Dict[str, ExtendedUbus] = {}
         self._session = None
 
-    def logout(self):
+    async def logout(self):
         """Logout all ubus clients."""
         for client in self._ubus_clients.values():
-            client.logout()
+            await client.logout()
 
     async def _get_ubus_client(self, client_type: str = "default") -> ExtendedUbus:
         """Get or create ubus client instance."""
@@ -274,7 +274,7 @@ class SharedUbusDataManager:
         try:
             # Get AP devices
             ap_devices_result = await client.get_hostapd()
-            ap_devices = client.parse_hostapd_ap_devices(ap_devices_result) if ap_devices_result else []
+            ap_devices = list(ap_devices_result.keys()) if ap_devices_result else []
 
             device_statistics = {}
 

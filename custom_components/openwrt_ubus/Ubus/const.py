@@ -24,7 +24,9 @@ API_PARAM_USERNAME = "username"
 API_SUBSYS_SESSION = "session"
 
 # Basic methods
-API_METHOD_LOGIN = "login"
+API_SESSION_METHOD_LOGIN = "login"
+API_SESSION_METHOD_DESTROY = "destroy"
+API_SESSION_METHOD_LIST = "list"
 
 # Common ubus error codes
 UBUS_ERROR_SUCCESS = 0
@@ -39,3 +41,14 @@ UBUS_ERROR_NOT_SUPPORTED = 8
 UBUS_ERROR_UNKNOWN_ERROR = 9
 
 HTTP_STATUS_OK = 200
+
+
+def _get_error_message(error_code):
+    """Get descriptive error message for ubus error codes."""
+    error_messages = {
+        UBUS_ERROR_SUCCESS: "Success",
+        UBUS_ERROR_PERMISSION_DENIED: "Permission Denied",
+        UBUS_ERROR_NOT_FOUND: "Not Found",
+        UBUS_ERROR_NO_DATA: "No Data",
+    }
+    return error_messages.get(error_code, f"Unknown Error ({error_code})")
