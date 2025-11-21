@@ -573,6 +573,15 @@ class SharedUbusDataManager:
             # Use safe get to avoid KeyError if cache not yet populated
             combined_data["system_board"] = self._data_cache.get("system_board", {})
 
+        if "system_stat" in system_types:
+            if await self._should_update("system_stat"):
+                async with self._update_locks["system_stat"]:
+                    system_stat = await system_client.system_stat()
+                    self._data_cache["system_stat"] = system_stat  # Store raw data
+                    self._last_update["system_stat"] = datetime.now()
+            # Use safe get to avoid KeyError if cache not yet populated
+            combined_data["system_stat"] = self._data_cache.get("system_stat", {})
+
         return combined_data
 
     async def get_data(self, data_type: str) -> Dict[str, Any]:

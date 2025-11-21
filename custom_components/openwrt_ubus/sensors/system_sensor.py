@@ -213,18 +213,18 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> SharedDataUpdateCoordinator:
     """Set up OpenWrt system sensors from a config entry."""
-    
+
     # Get shared data manager
     data_manager_key = f"data_manager_{entry.entry_id}"
     data_manager = hass.data[DOMAIN][data_manager_key]
-    
+
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
         CONF_SYSTEM_SENSOR_TIMEOUT,
         entry.data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT)
     )
     scan_interval = timedelta(seconds=timeout)
-    
+
     # Create coordinator using shared data manager
     coordinator = SharedDataUpdateCoordinator(
         hass,
@@ -241,7 +241,7 @@ async def async_setup_entry(
         SystemInfoSensor(coordinator, description)
         for description in SENSOR_DESCRIPTIONS
     ]
-    
+
     # Add temperature sensors dynamically based on available sensors
     if coordinator.data and "system_temperatures" in coordinator.data:
         temperatures = coordinator.data["system_temperatures"]
@@ -324,11 +324,11 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
     def _get_sensor_value(self) -> Any:
         """Get the sensor value from coordinator data."""
         key = self.entity_description.key
-        
+
         # Handle system info data
         system_info = self.coordinator.data.get("system_info", {})
         board_info = self.coordinator.data.get("system_board", {})
-        
+
         # Map sensor keys to their data sources
         if key == "uptime":
             return system_info.get("uptime")
@@ -345,7 +345,7 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
                 return None
             cpu_idle = cpu_data[3] + cpu_data[4]
             cpu_total = sum(cpu_data)
-            if self.cpu_idle == None or self.cpu_total == None:
+            if self.cpu_idle is None or self.cpu_total is None:
                 cpu_usage = None
             else:
                 cpu_idle_delta = cpu_idle - self.cpu_idle
@@ -373,9 +373,9 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
         elif key.startswith("swap_"):
             swap = system_info.get("swap", {})
             if key == "swap_total":
-                return round(swap.get("total", 0) / (1024 * 1024), 1) if swap.get("total") else None
+                return round(swap.get("total", 0) / (1024 * 1024), 1) if "total" in swap else None
             elif key == "swap_free":
-                return round(swap.get("free", 0) / (1024 * 1024), 1) if swap.get("free") else None
+                return round(swap.get("free", 0) / (1024 * 1024), 1) if "free" in swap else None
         elif key.startswith("board_"):
             board_key = key.replace("board_", "")
             return board_info.get(board_key)
@@ -396,7 +396,7 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
             root = self.coordinator.data.get("system_info", {}).get("root", {})
             free = root.get("free")
             return round(free / 1024, 2) if free is not None else None
-        
+
         return None
 
     @property
