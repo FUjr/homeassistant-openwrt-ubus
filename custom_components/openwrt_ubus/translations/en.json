@@ -2,42 +2,44 @@
   "config": {
     "step": {
       "user": {
-        "title": "OpenWrt ubus",
+        "title": "OpenWrt ubus - Connection",
         "description": "Set up connection to OpenWrt device using ubus for wireless device tracking and system monitoring",
         "data": {
           "host": "Host",
           "username": "Username",
           "password": "Password",
           "wireless_software": "Wireless Software",
-          "dhcp_software": "DHCP Software"
+          "dhcp_software": "DHCP Software",
+          "tracking_method": "Tracking Method"
         }
       },
       "sensors": {
-        "title": "Sensor Configuration",
-        "description": "Choose which sensors to enable for {host}",
+        "title": "OpenWrt ubus - Sensor Configuration",
+        "description": "Choose which sensor types to enable for {host}",
         "data": {
           "enable_system_sensors": "Enable System Sensors",
           "enable_qmodem_sensors": "Enable QModem Sensors",
-          "enable_sta_sensors": "Enable Station Device Sensors",
+          "enable_sta_sensors": "Enable Station (WiFi Device) Sensors",
           "enable_ap_sensors": "Enable Access Point Sensors",
+          "enable_eth_sensors": "Enable Network Interface Sensors",
           "enable_service_controls": "Enable Service Controls",
           "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)"
         }
       },
       "services": {
-        "title": "Service Selection",
+        "title": "OpenWrt ubus - Service Selection",
         "description": "Select services to control for {host} (found {services_count} services)",
         "data": {
           "selected_services": "Services to Control"
         }
       },
       "timeouts": {
-        "title": "Timeout Configuration",
-        "description": "Configure update intervals for {host}",
+        "title": "OpenWrt ubus - Timeout Configuration",
+        "description": "Configure update intervals for sensors on {host}",
         "data": {
           "system_sensor_timeout": "System Sensor Update Interval (seconds)",
           "qmodem_sensor_timeout": "QModem Sensor Update Interval (seconds)",
-          "sta_sensor_timeout": "Station Device Sensor Update Interval (seconds)",
+          "sta_sensor_timeout": "Station Sensor Update Interval (seconds)",
           "ap_sensor_timeout": "Access Point Sensor Update Interval (seconds)",
           "service_timeout": "Service Status Update Interval (seconds)"
         }
@@ -61,18 +63,21 @@
         "description": "Configure sensor types, timeouts, and other options for your OpenWrt device",
         "data": {
           "wireless_software": "Wireless Software",
-          "dhcp_software": "DHCP Software", 
+          "dhcp_software": "DHCP Software",
           "enable_system_sensors": "Enable System Sensors",
           "enable_qmodem_sensors": "Enable QModem Sensors",
-          "enable_sta_sensors": "Enable Station Device Sensors",
+          "enable_sta_sensors": "Enable Station (WiFi Device) Sensors",
           "enable_ap_sensors": "Enable Access Point Sensors",
+          "enable_eth_sensors": "Enable Network Interface Sensors",
           "enable_service_controls": "Enable Service Controls",
+          "enable_device_kick_buttons": "Enable Device Kick Buttons",
           "selected_services": "Services to Control",
           "refresh_services": "Refresh Services List",
           "system_sensor_timeout": "System Sensor Update Interval (seconds)",
           "qmodem_sensor_timeout": "QModem Sensor Update Interval (seconds)",
-          "sta_sensor_timeout": "Station Device Sensor Update Interval (seconds)",
-          "ap_sensor_timeout": "Access Point Sensor Update Interval (seconds)"
+          "sta_sensor_timeout": "Station Sensor Update Interval (seconds)",
+          "ap_sensor_timeout": "Access Point Sensor Update Interval (seconds)",
+          "tracking_method": "Tracking Method"
         },
         "data_description": {
           "wireless_software": "Software used to get wireless information (iwinfo or hostapd)",
@@ -81,10 +86,13 @@
           "enable_qmodem_sensors": "Monitor cellular modem information (if available)",
           "enable_sta_sensors": "Monitor connected WiFi devices and their statistics",
           "enable_ap_sensors": "Monitor access point interface information (WiFi network details)",
+          "enable_eth_sensors": "Monitor network interface statistics",
+          "enable_device_kick_buttons": "Enable buttons to disconnect devices from Access Points (requires hostapd)",
           "system_sensor_timeout": "How often to update system sensor data (10-300 seconds)",
           "qmodem_sensor_timeout": "How often to update modem sensor data (30-600 seconds)",
           "sta_sensor_timeout": "How often to update station device data (10-300 seconds)",
-          "ap_sensor_timeout": "How often to update access point data (30-600 seconds)"
+          "ap_sensor_timeout": "How often to update access point data (30-600 seconds)",
+          "tracking_method": "Tracking method for devices: 'uniqueid' uses MAC address only (device roams between APs), 'combined' uses AP+MAC (separate entities per AP)"
         }
       }
     }
@@ -255,6 +263,19 @@
       },
       "country": {
         "name": "Country"
+      }
+    },
+    "switch": {
+      "service": {
+        "name": "{service_name} Service",
+        "state_attributes": {
+          "service_name": {
+            "name": "Service Name"
+          },
+          "host": {
+            "name": "Router Host"
+          }
+        }
       }
     },
     "button": {

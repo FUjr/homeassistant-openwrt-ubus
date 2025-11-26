@@ -6,3 +6,75 @@ scan_devices:
   target:
     entity:
       integration: openwrt_ubus
+uci_get:
+  name: UCI get
+  description: Read a UCI value via ubus on the OpenWrt router and optionally write it to a sensor
+  fields:
+    config:
+      name: Config
+      description: UCI config name (e.g. firewall)
+      example: firewall
+      required: true
+      selector:
+        text:
+    section:
+      name: Section
+      description: Section name or type/index (e.g. block_user_7085c2 or @rule[3])
+      example: block_user_7085c2
+      required: false
+      selector:
+        text:
+    option:
+      name: Option
+      description: Option name (e.g. enabled)
+      example: enabled
+      required: false
+      selector:
+        text:
+    target_entity_id:
+      name: Target entity ID
+      description: Sensor or entity ID to store the retrieved value in (e.g. sensor.block_user_7085c2_enabled)
+      required: false
+      example: sensor.block_user_7085c2_enabled
+      selector:
+        entity:
+          domain: sensor
+uci_set_commit:
+  name: UCI set + commit
+  description: Set a UCI option value and commit the change
+  fields:
+    config:
+      name: Config
+      description: UCI config name (e.g. firewall)
+      required: true
+      example: firewall
+      selector:
+        text:
+    section:
+      name: Section
+      description: Section name or type/index (e.g. block_user_7085c2)
+      required: true
+      example: block_user_7085c2
+      selector:
+        text:
+    option:
+      name: Option
+      description: Option name to set (e.g. enabled)
+      required: true
+      example: enabled
+      selector:
+        text:
+    value:
+      name: Value
+      description: Option value - string or JSON array for list-type options (e.g. "0", "1", or ["192.168.1.1", "8.8.8.8"])
+      required: true
+      example: "0"
+      selector:
+        text:
+    service:
+      name: Service
+      description: Optional service name(s) to restart after UCI commit (e.g. "dnsmasq" or ["firewall", "network"]). If provided, specified services will be restarted to apply configuration changes.
+      required: false
+      example: dnsmasq
+      selector:
+        text:

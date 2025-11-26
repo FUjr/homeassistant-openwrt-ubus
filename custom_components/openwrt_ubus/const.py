@@ -17,6 +17,8 @@ DEFAULT_USE_HTTPS = False
 DEFAULT_VERIFY_SSL = False  # 默认不验证SSL，因为使用未签名证书
 DHCP_SOFTWARES = ["dnsmasq", "odhcpd", "none"]
 WIRELESS_SOFTWARES = ["hostapd", "iwinfo", "none"]
+TRACKING_METHODS = ["uniqueid", "combined"]
+CONF_TRACKING_METHOD = "tracking_method"
 
 # Sensor enable/disable configuration
 CONF_ENABLE_QMODEM_SENSORS = "enable_qmodem_sensors"
@@ -43,6 +45,7 @@ DEFAULT_ENABLE_SYSTEM_SENSORS = True
 DEFAULT_ENABLE_AP_SENSORS = True
 DEFAULT_ENABLE_ETH_SENSORS = True
 DEFAULT_ENABLE_SERVICE_CONTROLS = False
+DEFAULT_TRACKING_METHOD = "combined"
 
 DEFAULT_ENABLE_DEVICE_KICK_BUTTONS = False
 DEFAULT_SELECTED_SERVICES = []
@@ -70,6 +73,7 @@ API_SUBSYS_SYSTEM = "system"
 API_SUBSYS_UCI = "uci"
 API_SUBSYS_QMODEM = "modem_ctrl"
 API_SUBSYS_RC = "rc"
+API_SUBSYS_WIRELESS = "network.wireless"
 
 # API methods
 API_METHOD_BOARD = "board"
@@ -84,3 +88,5 @@ API_METHOD_REBOOT = "reboot"
 API_METHOD_DEL_CLIENT = "del_client"
 API_METHOD_LIST = "list"
 API_METHOD_INIT = "init"
+API_METHOD_SET = "set"
+API_METHOD_COMMIT = "commit"
