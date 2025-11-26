@@ -8,6 +8,9 @@
           "host": "主机地址",
           "username": "用户名",
           "password": "密码",
+          "use_https": "使用 HTTPS",
+          "verify_ssl": "验证 SSL 证书",
+          "cert_path": "自定义证书路径（可选）",
           "wireless_software": "无线软件",
           "dhcp_software": "DHCP 软件"
         }
