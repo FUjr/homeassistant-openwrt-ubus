@@ -304,6 +304,7 @@ class Ubus:
     async def connect(self):
         """Connect to OpenWrt ubus API."""
         self.session_expire = 0
+        self.session_id = None
 
         login = await self._api_call(
             API_RPC_CALL,
