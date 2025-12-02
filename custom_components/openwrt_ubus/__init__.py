@@ -6,13 +6,14 @@ import logging
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_IP_ADDRESS, CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
+from .Ubus.const import API_DEF_TIMEOUT
 from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
@@ -45,6 +46,8 @@ CONFIG_SCHEMA = vol.Schema(
         DOMAIN: vol.Schema(
             {
                 vol.Required(CONF_HOST): cv.string,
+                vol.Optional(CONF_IP_ADDRESS): cv.string,
+                vol.Optional(CONF_VERIFY_SSL, default=False): cv.boolean,
                 vol.Required(CONF_USERNAME): cv.string,
                 vol.Required(CONF_PASSWORD): cv.string,
                 vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(
@@ -78,15 +81,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     # Test connection before setting up platforms
+    hostname = entry.data[CONF_HOST]
     try:
-        url = f"http://{entry.data[CONF_HOST]}/ubus"
+        ip = entry.data.get(CONF_IP_ADDRESS, None)
+        url = f"http://{ip if ip else hostname}/ubus"
         session = async_get_clientsession(hass)
-        ubus = ExtendedUbus(url, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD], session=session)
+        ubus = ExtendedUbus(url, hostname, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD],
+                            session=session, timeout=API_DEF_TIMEOUT, verify=entry.data.get(CONF_VERIFY_SSL, False))
 
         # Test connection
         session_id = await ubus.connect()
         if session_id is None:
-            raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {entry.data[CONF_HOST]}")
+            raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {hostname}")
 
         # Check for modem_ctrl availability and store the result
         try:
@@ -230,7 +236,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
     except Exception as exc:
-        raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {entry.data[CONF_HOST]}: {exc}") from exc
+        raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {hostname}: {exc}") from exc
 
     # Store the config entry data as a mutable dict
     hass.data[DOMAIN][f"entry_data_{entry.entry_id}"] = dict(entry.data)

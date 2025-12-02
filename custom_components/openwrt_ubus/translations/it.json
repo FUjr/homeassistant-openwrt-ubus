@@ -6,6 +6,8 @@
         "description": "Configura la connessione al dispositivo OpenWrt utilizzando ubus per il tracciamento dei dispositivi wireless e il monitoraggio del sistema",
         "data": {
           "host": "Host",
+          "ip_address": "Indirizzo IP",
+          "verify_ssl": "Verifica Certificato SSL",
           "username": "Utente",
           "password": "Password",
           "wireless_software": "Software Wireless",
@@ -62,6 +64,7 @@
         "title": "Configura l'Integrazione OpenWrt ubus",
         "description": "Configura i tipi di sensore, gli intervalli di aggiornamento e altre opzioni per il tuo dispositivo OpenWrt",
         "data": {
+          "verify_ssl": "Verifica Certificato SSL",
           "wireless_software": "Software Wireless",
           "dhcp_software": "Software DHCP",
           "enable_system_sensors": "Abilita Sensori di Sistema",

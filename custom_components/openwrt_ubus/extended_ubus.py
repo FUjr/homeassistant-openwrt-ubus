@@ -42,12 +42,15 @@ class ExtendedUbus(Ubus):
 
     def __init__(
             self,
-            host,
+            url,
+            hostname,
             username,
             password,
             session,
+            timeout,
+            verify
     ):
-        super().__init__(host, username, password, session)
+        super().__init__(url, hostname, username, password, session, timeout, verify)
         self._interface_to_ssid_cache = {}  # Cache for interface->SSID mapping
 
     async def get_interface_to_ssid_mapping(self):
