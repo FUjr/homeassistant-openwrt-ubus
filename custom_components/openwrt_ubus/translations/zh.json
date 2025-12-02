@@ -6,6 +6,8 @@
         "description": "配置连接到 OpenWrt 设备，使用 ubus 进行无线设备跟踪和系统监控",
         "data": {
           "host": "主机地址",
+          "ip_address": "IP 地址",
+          "verify_ssl": "验证 SSL 证书",
           "username": "用户名",
           "password": "密码",
           "wireless_software": "无线软件",
@@ -60,6 +62,7 @@
         "title": "OpenWrt ubus 配置",
         "description": "配置 {host} 的传感器、超时时间和软件设置",
         "data": {
+          "verify_ssl": "验证 SSL 证书",
           "wireless_software": "无线软件",
           "dhcp_software": "DHCP 软件",
           "enable_system_sensors": "启用系统传感器",
