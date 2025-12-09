@@ -6,14 +6,16 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow, ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_IP_ADDRESS, CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from . import API_DEF_TIMEOUT
+from .Ubus import Ubus
+from .Ubus.const import API_RPC_CALL
 from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
@@ -40,7 +42,6 @@ from .const import (
     DEFAULT_ENABLE_ETH_SENSORS,
     DEFAULT_ENABLE_SERVICE_CONTROLS,
     DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
-    DEFAULT_SELECTED_SERVICES,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
     DEFAULT_STA_SENSOR_TIMEOUT,
@@ -54,8 +55,6 @@ from .const import (
     API_SUBSYS_RC,
     API_METHOD_LIST,
 )
-from .Ubus import Ubus
-from .Ubus.const import API_RPC_CALL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,6 +62,8 @@ _LOGGER = logging.getLogger(__name__)
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
+        vol.Optional(CONF_IP_ADDRESS): str,
+        vol.Optional(CONF_VERIFY_SSL, default=False): bool,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
         vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(
@@ -117,12 +118,8 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
-    # Get Home Assistant's HTTP client session
-    session = async_get_clientsession(hass)
-    
-    url = f"http://{data[CONF_HOST]}/ubus"
-    ubus = Ubus(url, data[CONF_USERNAME], data[CONF_PASSWORD], session=session)
-    
+    ubus = create_ubus_from_config(hass, data)
+
     try:
         # Test connection
         session_id = await ubus.connect()
@@ -140,29 +137,36 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     return {"title": f"OpenWrt ubus {data[CONF_HOST]}"}
 
 
+def create_ubus_from_config(hass: HomeAssistant, data: dict) -> Ubus:
+    session = async_get_clientsession(hass)
+    hostname = data[CONF_HOST]
+    ip = data.get(CONF_IP_ADDRESS, None)
+    url = f"http://{ip if ip else hostname}/ubus"
+    return Ubus(url, hostname, data[CONF_USERNAME], data[CONF_PASSWORD], session=session,
+                timeout=API_DEF_TIMEOUT, verify=data.get(CONF_VERIFY_SSL, False))
+
+
 async def get_services_list(hass: HomeAssistant, data: dict[str, Any]) -> list[str]:
     """Get list of available services from OpenWrt."""
-    session = async_get_clientsession(hass)
-    url = f"http://{data[CONF_HOST]}/ubus"
-    ubus = Ubus(url, data[CONF_USERNAME], data[CONF_PASSWORD], session=session)
-    
+    ubus = create_ubus_from_config(hass, data)
+
     try:
         session_id = await ubus.connect()
         if session_id is None:
             return []
-        
+
         # Call rc list to get services
         response = await ubus.api_call(API_RPC_CALL, API_SUBSYS_RC, API_METHOD_LIST, {})
         if response and isinstance(response, dict):
             services = list(response.keys())
             return sorted(services)
-        
+
     except Exception as exc:
         _LOGGER.warning("Failed to get services list: %s", exc)
         return []
     finally:
         await ubus.close()
-    
+
     return []
 
 
@@ -185,7 +189,7 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         return OpenwrtUbusOptionsFlow(config_entry)
 
     async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
@@ -213,16 +217,16 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_sensors(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the sensor configuration step."""
         if user_input is not None:
             self._sensor_data = user_input
-            
+
             # If service controls are enabled, proceed to services selection
             if user_input.get(CONF_ENABLE_SERVICE_CONTROLS, False):
                 return await self.async_step_services()
-            
+
             return await self.async_step_timeouts()
 
         return self.async_show_form(
@@ -234,15 +238,15 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_services(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the services selection step."""
         errors: dict[str, str] = {}
-        
+
         if user_input is not None:
             self._services_data = user_input
             return await self.async_step_timeouts()
-        
+
         # Get available services
         if not self._available_services:
             try:
@@ -250,10 +254,10 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
             except Exception as exc:
                 _LOGGER.warning("Failed to get services list: %s", exc)
                 errors["base"] = "cannot_get_services"
-        
+
         if not self._available_services and not errors:
             errors["base"] = "no_services_found"
-        
+
         # Create multi-select schema for services
         services_schema = vol.Schema({})
         if self._available_services:
@@ -262,7 +266,7 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
                     {service: service for service in self._available_services}
                 ),
             })
-        
+
         return self.async_show_form(
             step_id="services",
             data_schema=services_schema,
@@ -274,7 +278,7 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_timeouts(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle the timeout configuration step."""
         if user_input is not None:
@@ -285,7 +289,7 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
                 **self._services_data,
                 **user_input,
             }
-            
+
             info = {"title": f"OpenWrt ubus {config_data[CONF_HOST]}"}
             return self.async_create_entry(title=info["title"], data=config_data)
 
@@ -307,32 +311,36 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         self._available_services: list[str] = []
 
     async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             # Check if we need to refresh services
             if user_input.get("refresh_services", False):
                 return await self.async_step_services()
-            
+
             # Get current data and merge with new options
             new_data = dict(self.config_entry.data)
             new_data.update(user_input)
-            
+
             # Update the config entry with new data
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data
             )
-            
+
             # Reload the integration to apply changes
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-            
+
             return self.async_create_entry(title="", data={})
 
         # Create form with all configurable options
         current_data = self.config_entry.data
         options_schema = vol.Schema(
             {
+                vol.Optional(
+                    CONF_VERIFY_SSL,
+                    default=current_data.get(CONF_VERIFY_SSL, False)
+                ): bool,
                 vol.Optional(
                     CONF_WIRELESS_SOFTWARE,
                     default=current_data.get(CONF_WIRELESS_SOFTWARE, DEFAULT_WIRELESS_SOFTWARE)
@@ -402,26 +410,26 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         )
 
     async def async_step_services(
-        self, user_input: dict[str, Any] | None = None
+            self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle services configuration."""
         errors: dict[str, str] = {}
-        
+
         if user_input is not None:
             # Update config with selected services
             new_data = dict(self.config_entry.data)
             new_data.update(user_input)
-            
+
             # Update the config entry
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data
             )
-            
+
             # Reload the integration
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-            
+
             return self.async_create_entry(title="", data={})
-        
+
         # Get available services
         if not self._available_services:
             try:
@@ -429,10 +437,10 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
             except Exception as exc:
                 _LOGGER.warning("Failed to get services list: %s", exc)
                 errors["base"] = "cannot_get_services"
-        
+
         if not self._available_services and not errors:
             errors["base"] = "no_services_found"
-        
+
         # Create multi-select schema for services
         current_services = self.config_entry.data.get(CONF_SELECTED_SERVICES, [])
         services_schema = vol.Schema({})
@@ -442,7 +450,7 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                     {service: service for service in self._available_services}
                 ),
             })
-        
+
         return self.async_show_form(
             step_id="services",
             data_schema=services_schema,

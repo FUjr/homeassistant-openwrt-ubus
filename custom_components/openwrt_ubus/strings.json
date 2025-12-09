@@ -6,6 +6,8 @@
         "description": "Set up connection to OpenWrt device using ubus for wireless device tracking and system monitoring",
         "data": {
           "host": "Host",
+          "ip_address": "IP Address",
+          "verify_ssl": "Verify SSL Certificate",
           "username": "Username",
           "password": "Password",
           "wireless_software": "Wireless Software",
@@ -62,6 +64,7 @@
         "title": "Configure OpenWrt ubus Integration",
         "description": "Configure sensor types, timeouts, and other options for your OpenWrt device",
         "data": {
+          "verify_ssl": "Verify SSL Certificate",
           "wireless_software": "Wireless Software",
           "dhcp_software": "DHCP Software",
           "enable_system_sensors": "Enable System Sensors",
@@ -80,6 +83,7 @@
           "tracking_method": "Tracking Method"
         },
         "data_description": {
+          "verify_ssl": "Whether to verify the SSL certificate when connecting to the router",
           "wireless_software": "Software used to get wireless information (iwinfo or hostapd)",
           "dhcp_software": "Software used to get DHCP lease information",
           "enable_system_sensors": "Monitor router system information (uptime, memory, load)",

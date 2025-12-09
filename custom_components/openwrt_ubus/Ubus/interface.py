@@ -56,15 +56,17 @@ class Ubus:
 
     def __init__(
             self,
-            host,
+            url,
+            hostname: str,
             username,
             password,
-            session=None,
-            timeout=API_DEF_TIMEOUT,
-            verify=API_DEF_VERIFY,
+            session: aiohttp.ClientSession,
+            timeout,
+            verify,
     ):
         """Init OpenWrt ubus API."""
-        self.host = host
+        self.url = url
+        self.hostname = hostname
         self.username = username
         self.password = password
         self.session = session  # Session will be provided externally
@@ -151,7 +153,8 @@ class Ubus:
             rpc_calls.append(rpc_call)
 
         response = await self.session.post(
-            self.host, data=json.dumps(rpc_calls), timeout=self.timeout, verify_ssl=self.verify
+            url=self.url, server_hostname=self.hostname,
+            data=json.dumps(rpc_calls), timeout=self.timeout, verify_ssl=self.verify
         )
 
         if response.status != HTTP_STATUS_OK:

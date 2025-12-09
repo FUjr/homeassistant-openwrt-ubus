@@ -8,11 +8,12 @@ from datetime import datetime, timedelta
 from typing import Any, Dict
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_IP_ADDRESS, CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from . import API_DEF_TIMEOUT
 from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
@@ -101,12 +102,15 @@ class SharedUbusDataManager:
             if self._session is None:
                 self._session = async_get_clientsession(self.hass)
 
-            url = f"http://{self.entry.data[CONF_HOST]}/ubus"
+            hostname = self.entry.data[CONF_HOST]
+            ip = self.entry.data.get(CONF_IP_ADDRESS, None)
+            url = f"http://{ip if ip else hostname}/ubus"
             username = self.entry.data[CONF_USERNAME]
             password = self.entry.data[CONF_PASSWORD]
 
             # Use ExtendedUbus for all client types now
-            client = ExtendedUbus(url, username, password, session=self._session)
+            client = ExtendedUbus(url, hostname, username, password, session=self._session,
+                                  timeout=API_DEF_TIMEOUT, verify=self.entry.data.get(CONF_VERIFY_SSL, False))
 
             # Connect to the client
             try:

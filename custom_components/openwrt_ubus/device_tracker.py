@@ -13,7 +13,7 @@ from homeassistant.components.device_tracker import (
     SourceType,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_VERIFY_SSL, CONF_IP_ADDRESS
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -58,10 +58,10 @@ def _generate_unique_id(host: str, mac_address: str, tracking_method: str) -> st
 
 
 async def _migrate_device_tracker_unique_ids(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    old_tracking_method: str,
-    new_tracking_method: str
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        old_tracking_method: str,
+        new_tracking_method: str
 ) -> None:
     """Migrate device tracker unique_ids when tracking method changes.
 
@@ -146,6 +146,8 @@ async def _migrate_device_tracker_unique_ids(
 PLATFORM_SCHEMA = DEVICE_TRACKER_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
+        vol.Optional(CONF_IP_ADDRESS): cv.string,
+        vol.Optional(CONF_VERIFY_SSL, default=False): cv.boolean,
         vol.Required(CONF_PASSWORD): cv.string,
         vol.Required(CONF_USERNAME): cv.string,
         vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(
@@ -265,10 +267,10 @@ async def async_setup_entry(
 
 
 async def _restore_known_devices_from_registry(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    coordinator: SharedDataUpdateCoordinator,
-    tracking_method: str
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        coordinator: SharedDataUpdateCoordinator,
+        tracking_method: str
 ) -> None:
     """Restore known devices from existing entity registry entries."""
     entity_registry = er.async_get(hass)
@@ -333,9 +335,9 @@ async def _create_entities_for_devices(hass: HomeAssistant, entry: ConfigEntry,
             # Search for entity with this unique_id across all config entries
             for entity_entry in entity_registry.entities.values():
                 if (entity_entry.domain == "device_tracker" and
-                    entity_entry.platform == DOMAIN and
-                    entity_entry.unique_id == unique_id and
-                    entity_entry.entity_id is not None):  # Not deleted
+                        entity_entry.platform == DOMAIN and
+                        entity_entry.unique_id == unique_id and
+                        entity_entry.entity_id is not None):  # Not deleted
                     existing_entity_id = entity_entry.entity_id
                     _LOGGER.debug(
                         "Found existing entity %s with unique_id %s (config_entry: %s)",
