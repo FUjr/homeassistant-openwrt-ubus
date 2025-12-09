@@ -78,3 +78,21 @@ uci_set_commit:
       example: dnsmasq
       selector:
         text:
+uci_network_interface:
+  name: UCI call
+  description: Call  UCI via ubus on the OpenWrt router 
+  fields:
+    section:
+      name: Section
+      description: network interface (e.g. network.interface.wwan)
+      required: true
+      example: network.interface.wwan
+      selector:
+        text:
+    option:
+      name: Option
+      description: Option name to set (e.g. up or down)
+      required: true
+      example: up
+      selector:
+        text:
