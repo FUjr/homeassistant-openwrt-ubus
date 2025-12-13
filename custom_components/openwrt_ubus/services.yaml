@@ -79,7 +79,7 @@ uci_set_commit:
       selector:
         text:
 uci_network_interface:
-  name: UCI call
+  name: UCI call 
   description: Call  UCI via ubus on the OpenWrt router 
   fields:
     section:
