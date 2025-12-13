@@ -176,6 +176,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         target_entity_id,
                     )
 
+            async def async_handle_uci_network_interface(call):
+                """Handle openwrt_ubus.uci_call service."""
+                #config = call.data["config"]
+                section = call.data["section"]
+                option = call.data["option"]
+
+                # Find a SharedUbusDataManager (single-router assumption)
+                shared_manager = None
+                for key, value in hass.data[DOMAIN].items():
+                    if key.startswith("data_manager_"):
+                        shared_manager = value
+                        break
+
+                if shared_manager is None:
+                    _LOGGER.error("No SharedUbusDataManager available for uci_get")
+                    return
+
+                # Use the data manager to obtain a connected ExtendedUbus client
+                client = await shared_manager._get_ubus_client()  # type: ignore[attr-defined]
+
+                # Call UCI uci_network_interface
+                result = await client.uci_network_interface(section, option)
+                _LOGGER.debug("UBUS call %s %s", section, option)
+
+
             async def async_handle_uci_set_commit(call):
                 """Handle openwrt_ubus.uci_set_commit service."""
                 config = call.data["config"]
@@ -232,6 +257,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 DOMAIN,
                 "uci_set_commit",
                 async_handle_uci_set_commit,
+            )
+
+            hass.services.async_register(
+                DOMAIN,
+                "uci_network_interface",
+                async_handle_uci_network_interface,
             )
 
 
