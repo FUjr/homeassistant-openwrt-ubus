@@ -312,6 +312,26 @@ class ExtendedUbus(Ubus):
             params,
         )
 
+    async def uci_network_interface(self, section: str, option: str):
+        """network_interface
+
+        used for working on the network.interface entry
+
+        Args:
+            section: network.interface.wwan.
+            option: up/down
+
+        Returns:
+            The result of the ubus API call or raises on errors from ``api_call``.
+        """
+        try:
+
+            _LOGGER.debug("Calling UCI call network")
+            return await self.api_call(API_RPC_CALL, section, option)
+        except Exception as exc:
+            _LOGGER.error("UCI call %s failed: %s", section, exc)
+            raise
+
     async def list_modem_ctrl(self):
         """List available modem_ctrl subsystems."""
         return await self.api_call(API_RPC_LIST, API_SUBSYS_QMODEM)
