@@ -221,7 +221,7 @@ async def async_setup_entry(
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
         CONF_SYSTEM_SENSOR_TIMEOUT,
-        entry.data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT)
+        entry.data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT),
     )
     scan_interval = timedelta(seconds=timeout)
 
@@ -229,7 +229,14 @@ async def async_setup_entry(
     coordinator = SharedDataUpdateCoordinator(
         hass,
         data_manager,
-        ["system_info", "system_stat", "system_board", "conntrack_count", "system_temperatures", "dhcp_clients_count"],  # Data types this coordinator needs
+        [
+            "system_info",
+            "system_stat",
+            "system_board",
+            "conntrack_count",
+            "system_temperatures",
+            "dhcp_clients_count",
+        ],  # Data types this coordinator needs
         f"{DOMAIN}_system_{entry.data[CONF_HOST]}",
         scan_interval,
     )
@@ -237,10 +244,7 @@ async def async_setup_entry(
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
 
-    entities = [
-        SystemInfoSensor(coordinator, description)
-        for description in SENSOR_DESCRIPTIONS
-    ]
+    entities = [SystemInfoSensor(coordinator, description) for description in SENSOR_DESCRIPTIONS]
 
     # Add temperature sensors dynamically based on available sensors
     if coordinator.data and "system_temperatures" in coordinator.data:
@@ -261,6 +265,7 @@ async def async_setup_entry(
 
     return coordinator
 
+
 class SystemInfoCoordinator(DataUpdateCoordinator):
     """Class to manage fetching system information from the router."""
 
@@ -275,6 +280,7 @@ class SystemInfoCoordinator(DataUpdateCoordinator):
         session = async_get_clientsession(hass)
 
         self.url = f"http://{self.host}/ubus"
+
 
 class SystemInfoSensor(CoordinatorEntity, SensorEntity):
     """Representation of a system information sensor."""
@@ -297,8 +303,12 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
     def device_info(self) -> DeviceInfo:
         """Return device info for the router."""
         # Try to get board info from coordinator data
-        board_model = self.coordinator.data.get("system_board", {}).get("model", "Router") if self.coordinator.data else "Router"
-        board_hostname = self.coordinator.data.get("system_board", {}).get("hostname") if self.coordinator.data else None
+        board_model = (
+            self.coordinator.data.get("system_board", {}).get("model", "Router") if self.coordinator.data else "Router"
+        )
+        board_hostname = (
+            self.coordinator.data.get("system_board", {}).get("hostname") if self.coordinator.data else None
+        )
         board_system = self.coordinator.data.get("system_board", {}).get("system") if self.coordinator.data else None
 
         # Use hostname for name if available, otherwise use host
@@ -339,7 +349,10 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
                 return load[load_map[key]] / 1000 if key in load_map else None
         elif key == "cpu_usage":
             system_stat = self.coordinator.data.get("system_stat", {}).get("data", "")
-            cpu_data = next((line for line in system_stat.splitlines() if line.startswith("cpu ")), "").split()[1:]
+            cpu_data = next(
+                (line for line in system_stat.splitlines() if line.startswith("cpu ")),
+                "",
+            ).split()[1:]
             cpu_data = [int(value) for value in cpu_data]
             if len(cpu_data) < 10:
                 return None
@@ -350,7 +363,7 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
             else:
                 cpu_idle_delta = cpu_idle - self.cpu_idle
                 cpu_total_delta = cpu_total - self.cpu_total
-                cpu_usage = round((1. - cpu_idle_delta/cpu_total_delta) * 100) if cpu_total_delta > 0 else None
+                cpu_usage = round((1.0 - cpu_idle_delta / cpu_total_delta) * 100) if cpu_total_delta > 0 else None
             self.cpu_total = cpu_total
             self.cpu_idle = cpu_idle
             return cpu_usage

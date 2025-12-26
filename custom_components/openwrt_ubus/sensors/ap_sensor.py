@@ -43,6 +43,7 @@ SCAN_INTERVAL = timedelta(seconds=60)  # AP info doesn't change frequently
 @dataclass
 class SensorValueMapping:
     """Data class for sensor value mapping configuration."""
+
     data_keys: list[str | tuple]
     convert_function: Callable
     default_value: Any = None
@@ -51,6 +52,7 @@ class SensorValueMapping:
 @dataclass
 class AttributeMapping:
     """Data class for extra attribute mapping configuration."""
+
     data_keys: list[str | tuple]
     convert_function: Callable
 
@@ -257,9 +259,9 @@ SENSOR_DESCRIPTIONS = [
 
 
 async def async_setup_entry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> SharedDataUpdateCoordinator:
     """Set up the access point sensors from a config entry."""
 
@@ -270,7 +272,7 @@ async def async_setup_entry(
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
         CONF_AP_SENSOR_TIMEOUT,
-        entry.data.get(CONF_AP_SENSOR_TIMEOUT, DEFAULT_AP_SENSOR_TIMEOUT)
+        entry.data.get(CONF_AP_SENSOR_TIMEOUT, DEFAULT_AP_SENSOR_TIMEOUT),
     )
     scan_interval = timedelta(seconds=timeout)
 
@@ -310,14 +312,13 @@ async def async_setup_entry(
                 device_sensors_to_add = []
                 for description in SENSOR_DESCRIPTIONS:
                     unique_id = f"{entry.data[CONF_HOST]}_ap_{ap_device}_{description.key}"
-                    existing_entity_id = entity_registry.async_get_entity_id(
-                        "sensor", DOMAIN, unique_id
-                    )
+                    existing_entity_id = entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id)
 
                     if existing_entity_id:
                         _LOGGER.debug(
                             "AP sensor entity %s already exists with entity_id %s, skipping creation",
-                            unique_id, existing_entity_id
+                            unique_id,
+                            existing_entity_id,
                         )
                         continue
 
@@ -329,21 +330,25 @@ async def async_setup_entry(
 
                 # Only add sensors that don't already exist and have data
                 if device_sensors_to_add:
-                    new_entities.extend([
-                        ApSensor(coordinator, description, ap_device)
-                        for description in device_sensors_to_add
-                    ])
+                    new_entities.extend(
+                        [ApSensor(coordinator, description, ap_device) for description in device_sensors_to_add]
+                    )
 
                 coordinator.known_devices.add(ap_device)
 
             # Add new entities only if there are any
             if new_entities:
                 async_add_entities(new_entities, True)
-                _LOGGER.info("Created %d AP sensor entities for %d new devices",
-                             len(new_entities), len(new_devices))
+                _LOGGER.info(
+                    "Created %d AP sensor entities for %d new devices",
+                    len(new_entities),
+                    len(new_devices),
+                )
             else:
-                _LOGGER.debug("No new AP sensor entities to create for %d devices (all already exist or no data)",
-                              len(new_devices))
+                _LOGGER.debug(
+                    "No new AP sensor entities to create for %d devices (all already exist or no data)",
+                    len(new_devices),
+                )
 
         # Handle removed devices - remove entities for devices that no longer exist
         removed_devices = coordinator.known_devices - current_devices
@@ -369,9 +374,7 @@ async def async_setup_entry(
             for description in SENSOR_DESCRIPTIONS:
                 mapping = SENSOR_VALUE_MAPPING.get(description.key)
                 if mapping and _has_required_data(ap_data, mapping.data_keys):
-                    initial_entities.append(
-                        ApSensor(coordinator, description, ap_device)
-                    )
+                    initial_entities.append(ApSensor(coordinator, description, ap_device))
 
     # Add initial entities if any
     if initial_entities:
@@ -394,10 +397,10 @@ class ApSensor(CoordinatorEntity, SensorEntity):
     """Representation of an access point sensor."""
 
     def __init__(
-            self,
-            coordinator: SharedDataUpdateCoordinator,
-            description: SensorEntityDescription,
-            ap_device: str,
+        self,
+        coordinator: SharedDataUpdateCoordinator,
+        description: SensorEntityDescription,
+        ap_device: str,
     ) -> None:
         """Initialize the access point sensor."""
         super().__init__(coordinator)
@@ -413,8 +416,11 @@ class ApSensor(CoordinatorEntity, SensorEntity):
         """Return device info to link this sensor to a device."""
         # Get device name from AP data if available
         device_name = f"AP {self.ap_device}"
-        if (self.coordinator.data and "ap_info" in self.coordinator.data
-                and self.ap_device in self.coordinator.data["ap_info"]):
+        if (
+            self.coordinator.data
+            and "ap_info" in self.coordinator.data
+            and self.ap_device in self.coordinator.data["ap_info"]
+        ):
             ap_data = self.coordinator.data["ap_info"][self.ap_device]
             if "device_name" in ap_data:
                 device_name = ap_data["device_name"]
@@ -432,10 +438,10 @@ class ApSensor(CoordinatorEntity, SensorEntity):
     def available(self) -> bool:
         """Return True if entity is available."""
         if not (
-                self.coordinator.last_update_success
-                and self.coordinator.data is not None
-                and "ap_info" in self.coordinator.data
-                and self.ap_device in self.coordinator.data["ap_info"]
+            self.coordinator.last_update_success
+            and self.coordinator.data is not None
+            and "ap_info" in self.coordinator.data
+            and self.ap_device in self.coordinator.data["ap_info"]
         ):
             return False
 
@@ -503,7 +509,12 @@ class ApSensor(CoordinatorEntity, SensorEntity):
                     if value is not None:  # Only add attribute if value is not None
                         attributes[attr_key] = value
             except (KeyError, TypeError, ValueError) as exc:
-                _LOGGER.debug("Error getting attribute %s for %s: %s", attr_key, self.ap_device, exc)
+                _LOGGER.debug(
+                    "Error getting attribute %s for %s: %s",
+                    attr_key,
+                    self.ap_device,
+                    exc,
+                )
                 continue
 
         return attributes

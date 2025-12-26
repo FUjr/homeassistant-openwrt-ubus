@@ -40,16 +40,7 @@ _LOGGER = logging.getLogger(__name__)
 class ExtendedUbus(Ubus):
     """Extended Ubus client with specific OpenWrt functionality."""
 
-    def __init__(
-            self,
-            url,
-            hostname,
-            username,
-            password,
-            session,
-            timeout,
-            verify
-    ):
+    def __init__(self, url, hostname, username, password, session, timeout, verify):
         super().__init__(url, hostname, username, password, session, timeout, verify)
         self._interface_to_ssid_cache = {}  # Cache for interface->SSID mapping
 
@@ -61,12 +52,7 @@ class ExtendedUbus(Ubus):
                 return self._interface_to_ssid_cache
 
             # Get wireless status
-            result = await self.api_call(
-                API_RPC_CALL,
-                API_SUBSYS_WIRELESS,
-                "status",
-                {}
-            )
+            result = await self.api_call(API_RPC_CALL, API_SUBSYS_WIRELESS, "status", {})
 
             if not result:
                 return {}
@@ -115,9 +101,7 @@ class ExtendedUbus(Ubus):
             # Simulate error accessing coordinator
             raise KeyError(eth_sensor_id)
         except KeyError as exc:
-            _LOGGER.error(
-                "Error accessing coordinator for eth_sensor: '%s'", eth_sensor_id
-            )
+            _LOGGER.error("Error accessing coordinator for eth_sensor: '%s'", eth_sensor_id)
             _LOGGER.debug("Sensor module eth_sensor returned no coordinator")
             return None
 
@@ -142,7 +126,7 @@ class ExtendedUbus(Ubus):
                     hostname = parts[1]
                     mapping[mac] = {
                         "hostname": hostname,
-                        "ip": hostname  # Use hostname as fallback for IP field
+                        "ip": hostname,  # Use hostname as fallback for IP field
                     }
                     _LOGGER.debug("Added ethers mapping: %s -> %s", mac, hostname)
 
@@ -200,7 +184,10 @@ class ExtendedUbus(Ubus):
                         _LOGGER.debug("Name result exists but no 'data' field: %s", name_result)
                         # If result is a list with error code, try to continue anyway
                         if isinstance(name_result, list) and len(name_result) > 0:
-                            _LOGGER.debug("Name file read returned error code: %s, using default name", name_result)
+                            _LOGGER.debug(
+                                "Name file read returned error code: %s, using default name",
+                                name_result,
+                            )
 
                     # Try multiple temperature inputs if available
                     temp_path = f"{hwmon_path}/temp1_input"
@@ -214,7 +201,11 @@ class ExtendedUbus(Ubus):
                         _LOGGER.debug("Temp result exists but no 'data' field: %s", temp_result)
 
                 except (ValueError, TypeError) as exc:
-                    _LOGGER.debug("Error converting temperature value from %s: %s", temp_result, exc)
+                    _LOGGER.debug(
+                        "Error converting temperature value from %s: %s",
+                        temp_result,
+                        exc,
+                    )
                     continue
 
             return temperatures
@@ -325,7 +316,6 @@ class ExtendedUbus(Ubus):
             The result of the ubus API call or raises on errors from ``api_call``.
         """
         try:
-
             _LOGGER.debug("Calling UCI call network")
             return await self.api_call(API_RPC_CALL, section, option)
         except Exception as exc:
@@ -373,7 +363,7 @@ class ExtendedUbus(Ubus):
                         "total": result["root"]["total"] / 1024,
                         "free": result["root"]["free"] / 1024,
                         "used": result["root"]["used"] / 1024,
-                        "avail": result["root"]["avail"] / 1024
+                        "avail": result["root"]["avail"] / 1024,
                     }
                 except Exception as exc:
                     _LOGGER.debug("Error parsing root partition values: %s", exc)
@@ -398,7 +388,8 @@ class ExtendedUbus(Ubus):
         elif isinstance(result, dict):
             # Dictionary format with "results" key - normalize MAC addresses to uppercase
             sta_devices.extend(
-                device["mac"].upper() for device in result.get("results", [])
+                device["mac"].upper()
+                for device in result.get("results", [])
                 if isinstance(device, dict) and "mac" in device
             )
         return sta_devices
@@ -418,7 +409,10 @@ class ExtendedUbus(Ubus):
             # Dictionary format with "results" key
             devices_list = result.get("results", [])
         else:
-            _LOGGER.warning("Unexpected result type in parse_sta_statistics: %s", type(result).__name__)
+            _LOGGER.warning(
+                "Unexpected result type in parse_sta_statistics: %s",
+                type(result).__name__,
+            )
             return sta_statistics
 
         # iwinfo format - each device has detailed statistics
@@ -520,13 +514,13 @@ class ExtendedUbus(Ubus):
                 if isinstance(result, dict) and result:
                     if is_hostapd:
                         sta_data[ap_device] = {
-                            'devices': self.parse_hostapd_sta_devices(result),
-                            'statistics': self.parse_hostapd_sta_statistics(result)
+                            "devices": self.parse_hostapd_sta_devices(result),
+                            "statistics": self.parse_hostapd_sta_statistics(result),
                         }
                     else:
                         sta_data[ap_device] = {
-                            'devices': self.parse_sta_devices(result),
-                            'statistics': self.parse_sta_statistics(result)
+                            "devices": self.parse_sta_devices(result),
+                            "statistics": self.parse_sta_statistics(result),
                         }
                 elif isinstance(result, Exception):
                     _LOGGER.error("Exception in batch call for %s: %s", ap_device, result)
@@ -569,7 +563,11 @@ class ExtendedUbus(Ubus):
                     # Only add AP if it has an SSID
                     if (ap_info := self.parse_ap_info(result, ap_device)) and ap_info.get("ssid"):
                         ap_info_data[ap_device] = ap_info
-                        _LOGGER.debug("AP info fetched for device %s with SSID %s", ap_device, ap_info.get("ssid"))
+                        _LOGGER.debug(
+                            "AP info fetched for device %s with SSID %s",
+                            ap_device,
+                            ap_info.get("ssid"),
+                        )
                     else:
                         _LOGGER.debug("Skipping AP device %s - no SSID found", ap_device)
                 elif isinstance(result, Exception):
@@ -625,21 +623,44 @@ class ExtendedUbus(Ubus):
                     if isinstance(result, dict):
                         if service_name in result:
                             service_status = result[service_name]
-                            _LOGGER.debug("Extracted service status for %s: %s", service_name, service_status)
+                            _LOGGER.debug(
+                                "Extracted service status for %s: %s",
+                                service_name,
+                                service_status,
+                            )
 
                             # Parse service status - OpenWrt RC returns different formats
                             parsed_status = self._parse_service_status(service_status, service_name)
                             services_with_status[service_name] = parsed_status
                         else:
-                            _LOGGER.debug("Service %s not found in response dict, using default", service_name)
-                            services_with_status[service_name] = {"running": False, "enabled": False}
+                            _LOGGER.debug(
+                                "Service %s not found in response dict, using default",
+                                service_name,
+                            )
+                            services_with_status[service_name] = {
+                                "running": False,
+                                "enabled": False,
+                            }
                     elif isinstance(result, Exception):
-                        _LOGGER.error("Exception for service %s: %s, using default", service_name, result)
-                        services_with_status[service_name] = {"running": False, "enabled": False}
+                        _LOGGER.error(
+                            "Exception for service %s: %s, using default",
+                            service_name,
+                            result,
+                        )
+                        services_with_status[service_name] = {
+                            "running": False,
+                            "enabled": False,
+                        }
                     else:
-                        _LOGGER.error("Unexpected result type for service %s: %s, using default", service_name,
-                                      type(result))
-                        services_with_status[service_name] = {"running": False, "enabled": False}
+                        _LOGGER.error(
+                            "Unexpected result type for service %s: %s, using default",
+                            service_name,
+                            type(result),
+                        )
+                        services_with_status[service_name] = {
+                            "running": False,
+                            "enabled": False,
+                        }
             else:
                 _LOGGER.warning("Batch call returned no results")
 
@@ -648,7 +669,12 @@ class ExtendedUbus(Ubus):
 
     def _parse_service_status(self, status_data, service_name):
         """Parse service status from RC API response."""
-        _LOGGER.debug("Parsing service status for %s: %s (type: %s)", service_name, status_data, type(status_data))
+        _LOGGER.debug(
+            "Parsing service status for %s: %s (type: %s)",
+            service_name,
+            status_data,
+            type(status_data),
+        )
 
         if not status_data:
             _LOGGER.debug("Service %s: No status data, returning disabled", service_name)
@@ -657,21 +683,30 @@ class ExtendedUbus(Ubus):
         # OpenWrt RC list returns a dict with service properties:
         # {"start": 99, "enabled": true, "running": false}
         if isinstance(status_data, dict):
-            _LOGGER.debug("Service %s: Dict status keys=%s", service_name, list(status_data.keys()))
+            _LOGGER.debug(
+                "Service %s: Dict status keys=%s",
+                service_name,
+                list(status_data.keys()),
+            )
 
             # Extract running and enabled status
             running = status_data.get("running", False)
             enabled = status_data.get("enabled", False)
             start_priority = status_data.get("start", 0)
 
-            _LOGGER.debug("Service %s: running=%s, enabled=%s, start=%s",
-                          service_name, running, enabled, start_priority)
+            _LOGGER.debug(
+                "Service %s: running=%s, enabled=%s, start=%s",
+                service_name,
+                running,
+                enabled,
+                start_priority,
+            )
 
             result = {
                 "running": bool(running),
                 "enabled": bool(enabled),
                 "start_priority": start_priority,
-                "raw_status": status_data
+                "raw_status": status_data,
             }
             _LOGGER.debug("Service %s: Final parsed result=%s", service_name, result)
             return result
@@ -679,12 +714,21 @@ class ExtendedUbus(Ubus):
         # Fallback for string or other formats (shouldn't happen with RC list)
         if isinstance(status_data, str):
             running = status_data.lower() in ["running", "active", "started"]
-            _LOGGER.debug("Service %s: String status '%s', running=%s", service_name, status_data, running)
+            _LOGGER.debug(
+                "Service %s: String status '%s', running=%s",
+                service_name,
+                status_data,
+                running,
+            )
             return {"running": running, "enabled": running, "status": status_data}
 
         # Fallback for unexpected formats
-        _LOGGER.warning("Service %s: Unexpected status format (type %s): %s", service_name, type(status_data),
-                        status_data)
+        _LOGGER.warning(
+            "Service %s: Unexpected status format (type %s): %s",
+            service_name,
+            type(status_data),
+            status_data,
+        )
         return {"running": False, "enabled": False, "raw_status": status_data}
 
     async def service_action(self, service_name, action):
@@ -693,7 +737,7 @@ class ExtendedUbus(Ubus):
             API_RPC_CALL,
             API_SUBSYS_RC,
             API_METHOD_INIT,
-            {"name": service_name, "action": action}
+            {"name": service_name, "action": action},
         )
 
     async def check_hostapd_available(self):
@@ -733,8 +777,8 @@ class ExtendedUbus(Ubus):
                 "addr": mac_address,
                 "deauth": True,
                 "reason": reason,
-                "ban_time": ban_time
-            }
+                "ban_time": ban_time,
+            },
         )
 
     async def get_network_devices(self):

@@ -31,31 +31,31 @@ SENSOR_MODULES = [
         "module": system_sensor,
         "config_key": CONF_ENABLE_SYSTEM_SENSORS,
         "default": DEFAULT_ENABLE_SYSTEM_SENSORS,
-        "name": "system_sensor"
+        "name": "system_sensor",
     },
     {
         "module": qmodem_sensor,
         "config_key": CONF_ENABLE_QMODEM_SENSORS,
         "default": DEFAULT_ENABLE_QMODEM_SENSORS,
-        "name": "qmodem_sensor"
+        "name": "qmodem_sensor",
     },
     {
         "module": sta_sensor,
         "config_key": CONF_ENABLE_STA_SENSORS,
         "default": DEFAULT_ENABLE_STA_SENSORS,
-        "name": "sta_sensor"
+        "name": "sta_sensor",
     },
     {
         "module": ap_sensor,
         "config_key": CONF_ENABLE_AP_SENSORS,
         "default": DEFAULT_ENABLE_AP_SENSORS,
-        "name": "ap_sensor"
+        "name": "ap_sensor",
     },
     {
         "module": eth_sensor,
         "config_key": CONF_ENABLE_ETH_SENSORS,
         "default": DEFAULT_ENABLE_ETH_SENSORS,
-        "name": "eth_sensor"
+        "name": "eth_sensor",
     },
 ]
 
@@ -79,10 +79,7 @@ async def async_setup_entry(
 
         # Check if this sensor type is enabled
         # Priority: options > data > default
-        enabled = entry.options.get(
-            config_key,
-            entry.data.get(config_key, default_enabled)
-        )
+        enabled = entry.options.get(config_key, entry.data.get(config_key, default_enabled))
 
         if not enabled:
             _LOGGER.info("Sensor module %s is disabled in configuration", module_name)
@@ -90,7 +87,7 @@ async def async_setup_entry(
 
         try:
             # Check if module has async_setup_entry function
-            if hasattr(module, 'async_setup_entry'):
+            if hasattr(module, "async_setup_entry"):
                 _LOGGER.debug("Loading sensor module: %s", module_name)
 
                 try:

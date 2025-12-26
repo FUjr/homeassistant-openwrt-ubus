@@ -6,8 +6,19 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow, ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_IP_ADDRESS, CONF_VERIFY_SSL
+from homeassistant.config_entries import (
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+    ConfigEntry,
+)
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_USERNAME,
+    CONF_IP_ADDRESS,
+    CONF_VERIFY_SSL,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import config_validation as cv
@@ -66,15 +77,9 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_VERIFY_SSL, default=False): bool,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
-        vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(
-            WIRELESS_SOFTWARES
-        ),
-        vol.Optional(CONF_DHCP_SOFTWARE, default=DEFAULT_DHCP_SOFTWARE): vol.In(
-            DHCP_SOFTWARES
-        ),
-        vol.Optional(CONF_TRACKING_METHOD, default=DEFAULT_TRACKING_METHOD): vol.In(
-            TRACKING_METHODS
-        ),
+        vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(WIRELESS_SOFTWARES),
+        vol.Optional(CONF_DHCP_SOFTWARE, default=DEFAULT_DHCP_SOFTWARE): vol.In(DHCP_SOFTWARES),
+        vol.Optional(CONF_TRACKING_METHOD, default=DEFAULT_TRACKING_METHOD): vol.In(TRACKING_METHODS),
     }
 )
 
@@ -142,8 +147,15 @@ def create_ubus_from_config(hass: HomeAssistant, data: dict) -> Ubus:
     hostname = data[CONF_HOST]
     ip = data.get(CONF_IP_ADDRESS, None)
     url = f"http://{ip if ip else hostname}/ubus"
-    return Ubus(url, hostname, data[CONF_USERNAME], data[CONF_PASSWORD], session=session,
-                timeout=API_DEF_TIMEOUT, verify=data.get(CONF_VERIFY_SSL, False))
+    return Ubus(
+        url,
+        hostname,
+        data[CONF_USERNAME],
+        data[CONF_PASSWORD],
+        session=session,
+        timeout=API_DEF_TIMEOUT,
+        verify=data.get(CONF_VERIFY_SSL, False),
+    )
 
 
 async def get_services_list(hass: HomeAssistant, data: dict[str, Any]) -> list[str]:
@@ -188,9 +200,7 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         """Create the options flow."""
         return OpenwrtUbusOptionsFlow(config_entry)
 
-    async def async_step_user(
-            self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -212,13 +222,9 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._connection_data = user_input
                 return await self.async_step_sensors()
 
-        return self.async_show_form(
-            step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
-        )
+        return self.async_show_form(step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors)
 
-    async def async_step_sensors(
-            self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_sensors(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the sensor configuration step."""
         if user_input is not None:
             self._sensor_data = user_input
@@ -232,14 +238,10 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="sensors",
             data_schema=STEP_SENSORS_DATA_SCHEMA,
-            description_placeholders={
-                "host": self._connection_data[CONF_HOST]
-            }
+            description_placeholders={"host": self._connection_data[CONF_HOST]},
         )
 
-    async def async_step_services(
-            self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_services(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the services selection step."""
         errors: dict[str, str] = {}
 
@@ -261,11 +263,13 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         # Create multi-select schema for services
         services_schema = vol.Schema({})
         if self._available_services:
-            services_schema = vol.Schema({
-                vol.Optional(CONF_SELECTED_SERVICES, default=[]): cv.multi_select(
-                    {service: service for service in self._available_services}
-                ),
-            })
+            services_schema = vol.Schema(
+                {
+                    vol.Optional(CONF_SELECTED_SERVICES, default=[]): cv.multi_select(
+                        {service: service for service in self._available_services}
+                    ),
+                }
+            )
 
         return self.async_show_form(
             step_id="services",
@@ -273,13 +277,11 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "host": self._connection_data[CONF_HOST],
-                "services_count": str(len(self._available_services)) if self._available_services else "0"
-            }
+                "services_count": str(len(self._available_services)) if self._available_services else "0",
+            },
         )
 
-    async def async_step_timeouts(
-            self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_timeouts(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the timeout configuration step."""
         if user_input is not None:
             # Combine all configuration data
@@ -296,9 +298,7 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="timeouts",
             data_schema=STEP_TIMEOUTS_DATA_SCHEMA,
-            description_placeholders={
-                "host": self._connection_data[CONF_HOST]
-            }
+            description_placeholders={"host": self._connection_data[CONF_HOST]},
         )
 
 
@@ -310,9 +310,7 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         super().__init__()
         self._available_services: list[str] = []
 
-    async def async_step_init(
-            self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             # Check if we need to refresh services
@@ -324,9 +322,7 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
             new_data.update(user_input)
 
             # Update the config entry with new data
-            self.hass.config_entries.async_update_entry(
-                self.config_entry, data=new_data
-            )
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
             # Reload the integration to apply changes
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
@@ -337,65 +333,65 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         current_data = self.config_entry.data
         options_schema = vol.Schema(
             {
-                vol.Optional(
-                    CONF_VERIFY_SSL,
-                    default=current_data.get(CONF_VERIFY_SSL, False)
-                ): bool,
+                vol.Optional(CONF_VERIFY_SSL, default=current_data.get(CONF_VERIFY_SSL, False)): bool,
                 vol.Optional(
                     CONF_WIRELESS_SOFTWARE,
-                    default=current_data.get(CONF_WIRELESS_SOFTWARE, DEFAULT_WIRELESS_SOFTWARE)
+                    default=current_data.get(CONF_WIRELESS_SOFTWARE, DEFAULT_WIRELESS_SOFTWARE),
                 ): vol.In(WIRELESS_SOFTWARES),
                 vol.Optional(
                     CONF_DHCP_SOFTWARE,
-                    default=current_data.get(CONF_DHCP_SOFTWARE, DEFAULT_DHCP_SOFTWARE)
+                    default=current_data.get(CONF_DHCP_SOFTWARE, DEFAULT_DHCP_SOFTWARE),
                 ): vol.In(DHCP_SOFTWARES),
                 vol.Optional(
                     CONF_TRACKING_METHOD,
-                    default=current_data.get(CONF_TRACKING_METHOD, DEFAULT_TRACKING_METHOD)
+                    default=current_data.get(CONF_TRACKING_METHOD, DEFAULT_TRACKING_METHOD),
                 ): vol.In(TRACKING_METHODS),
                 vol.Optional(
                     CONF_ENABLE_SYSTEM_SENSORS,
-                    default=current_data.get(CONF_ENABLE_SYSTEM_SENSORS, DEFAULT_ENABLE_SYSTEM_SENSORS)
+                    default=current_data.get(CONF_ENABLE_SYSTEM_SENSORS, DEFAULT_ENABLE_SYSTEM_SENSORS),
                 ): bool,
                 vol.Optional(
                     CONF_ENABLE_QMODEM_SENSORS,
-                    default=current_data.get(CONF_ENABLE_QMODEM_SENSORS, DEFAULT_ENABLE_QMODEM_SENSORS)
+                    default=current_data.get(CONF_ENABLE_QMODEM_SENSORS, DEFAULT_ENABLE_QMODEM_SENSORS),
                 ): bool,
                 vol.Optional(
                     CONF_ENABLE_STA_SENSORS,
-                    default=current_data.get(CONF_ENABLE_STA_SENSORS, DEFAULT_ENABLE_STA_SENSORS)
+                    default=current_data.get(CONF_ENABLE_STA_SENSORS, DEFAULT_ENABLE_STA_SENSORS),
                 ): bool,
                 vol.Optional(
                     CONF_ENABLE_AP_SENSORS,
-                    default=current_data.get(CONF_ENABLE_AP_SENSORS, DEFAULT_ENABLE_AP_SENSORS)
+                    default=current_data.get(CONF_ENABLE_AP_SENSORS, DEFAULT_ENABLE_AP_SENSORS),
                 ): bool,
                 vol.Optional(
                     CONF_ENABLE_ETH_SENSORS,
-                    default=current_data.get(CONF_ENABLE_ETH_SENSORS, DEFAULT_ENABLE_ETH_SENSORS)
+                    default=current_data.get(CONF_ENABLE_ETH_SENSORS, DEFAULT_ENABLE_ETH_SENSORS),
                 ): bool,
                 vol.Optional(
                     CONF_ENABLE_SERVICE_CONTROLS,
-                    default=current_data.get(CONF_ENABLE_SERVICE_CONTROLS, DEFAULT_ENABLE_SERVICE_CONTROLS)
+                    default=current_data.get(CONF_ENABLE_SERVICE_CONTROLS, DEFAULT_ENABLE_SERVICE_CONTROLS),
                 ): bool,
                 vol.Optional(
                     CONF_ENABLE_DEVICE_KICK_BUTTONS,
-                    default=current_data.get(CONF_ENABLE_DEVICE_KICK_BUTTONS, DEFAULT_ENABLE_DEVICE_KICK_BUTTONS)
+                    default=current_data.get(
+                        CONF_ENABLE_DEVICE_KICK_BUTTONS,
+                        DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
+                    ),
                 ): bool,
                 vol.Optional(
                     CONF_SYSTEM_SENSOR_TIMEOUT,
-                    default=current_data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT)
+                    default=current_data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT),
                 ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
                 vol.Optional(
                     CONF_QMODEM_SENSOR_TIMEOUT,
-                    default=current_data.get(CONF_QMODEM_SENSOR_TIMEOUT, DEFAULT_QMODEM_SENSOR_TIMEOUT)
+                    default=current_data.get(CONF_QMODEM_SENSOR_TIMEOUT, DEFAULT_QMODEM_SENSOR_TIMEOUT),
                 ): vol.All(vol.Coerce(int), vol.Range(min=30, max=600)),
                 vol.Optional(
                     CONF_STA_SENSOR_TIMEOUT,
-                    default=current_data.get(CONF_STA_SENSOR_TIMEOUT, DEFAULT_STA_SENSOR_TIMEOUT)
+                    default=current_data.get(CONF_STA_SENSOR_TIMEOUT, DEFAULT_STA_SENSOR_TIMEOUT),
                 ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
                 vol.Optional(
                     CONF_AP_SENSOR_TIMEOUT,
-                    default=current_data.get(CONF_AP_SENSOR_TIMEOUT, DEFAULT_AP_SENSOR_TIMEOUT)
+                    default=current_data.get(CONF_AP_SENSOR_TIMEOUT, DEFAULT_AP_SENSOR_TIMEOUT),
                 ): vol.All(vol.Coerce(int), vol.Range(min=30, max=600)),
                 vol.Optional("refresh_services", default=False): bool,
             }
@@ -404,14 +400,10 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=options_schema,
-            description_placeholders={
-                "host": self.config_entry.data[CONF_HOST]
-            }
+            description_placeholders={"host": self.config_entry.data[CONF_HOST]},
         )
 
-    async def async_step_services(
-            self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_services(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle services configuration."""
         errors: dict[str, str] = {}
 
@@ -421,9 +413,7 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
             new_data.update(user_input)
 
             # Update the config entry
-            self.hass.config_entries.async_update_entry(
-                self.config_entry, data=new_data
-            )
+            self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
 
             # Reload the integration
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
@@ -445,11 +435,13 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         current_services = self.config_entry.data.get(CONF_SELECTED_SERVICES, [])
         services_schema = vol.Schema({})
         if self._available_services:
-            services_schema = vol.Schema({
-                vol.Optional(CONF_SELECTED_SERVICES, default=current_services): cv.multi_select(
-                    {service: service for service in self._available_services}
-                ),
-            })
+            services_schema = vol.Schema(
+                {
+                    vol.Optional(CONF_SELECTED_SERVICES, default=current_services): cv.multi_select(
+                        {service: service for service in self._available_services}
+                    ),
+                }
+            )
 
         return self.async_show_form(
             step_id="services",
@@ -457,8 +449,8 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
             errors=errors,
             description_placeholders={
                 "host": self.config_entry.data[CONF_HOST],
-                "services_count": str(len(self._available_services)) if self._available_services else "0"
-            }
+                "services_count": str(len(self._available_services)) if self._available_services else "0",
+            },
         )
 
 

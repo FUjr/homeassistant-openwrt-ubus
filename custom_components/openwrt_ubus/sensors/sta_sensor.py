@@ -15,12 +15,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_HOST,
-    UnitOfTime,
-    UnitOfInformation,
-    UnitOfDataRate
-)
+from homeassistant.const import CONF_HOST, UnitOfTime, UnitOfInformation, UnitOfDataRate
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -46,6 +41,7 @@ SCAN_INTERVAL = timedelta(seconds=30)  # Device stats change more frequently
 @dataclass
 class SensorValueMapping:
     """Data class for sensor value mapping configuration."""
+
     data_keys: list[str | tuple]
     convert_function: Callable
     default_value: Any = None
@@ -54,6 +50,7 @@ class SensorValueMapping:
 @dataclass
 class AttributeMapping:
     """Data class for extra attribute mapping configuration."""
+
     data_keys: list[str | tuple]
     convert_function: Callable
 
@@ -349,10 +346,7 @@ async def _migrate_sta_sensor_unique_ids(
     entity_registry = er.async_get(hass)
     host = entry.data[CONF_HOST]
 
-    _LOGGER.info(
-        "Migrating STA sensor unique_ids for %s (tracking_method=uniqueid)",
-        host
-    )
+    _LOGGER.info("Migrating STA sensor unique_ids for %s (tracking_method=uniqueid)", host)
 
     # Get all sensor entities for this config entry
     existing_entities = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
@@ -381,41 +375,43 @@ async def _migrate_sta_sensor_unique_ids(
             continue
 
         # Check if new unique_id already exists (could be from another AP entry)
-        existing_entity_id = entity_registry.async_get_entity_id(
-            "sensor", DOMAIN, new_unique_id
-        )
+        existing_entity_id = entity_registry.async_get_entity_id("sensor", DOMAIN, new_unique_id)
 
         if existing_entity_id and existing_entity_id != entity_entry.entity_id:
             _LOGGER.warning(
                 "Cannot migrate %s to %s: new unique_id already exists for entity %s",
-                old_unique_id, new_unique_id, existing_entity_id
+                old_unique_id,
+                new_unique_id,
+                existing_entity_id,
             )
             continue
 
         # Perform migration
         try:
-            entity_registry.async_update_entity(
-                entity_entry.entity_id,
-                new_unique_id=new_unique_id
-            )
+            entity_registry.async_update_entity(entity_entry.entity_id, new_unique_id=new_unique_id)
             migrated_count += 1
             _LOGGER.debug(
                 "Migrated sensor entity %s: %s → %s",
-                entity_entry.entity_id, old_unique_id, new_unique_id
+                entity_entry.entity_id,
+                old_unique_id,
+                new_unique_id,
             )
         except Exception as exc:
             _LOGGER.error(
                 "Failed to migrate sensor entity %s from %s to %s: %s",
-                entity_entry.entity_id, old_unique_id, new_unique_id, exc
+                entity_entry.entity_id,
+                old_unique_id,
+                new_unique_id,
+                exc,
             )
 
     _LOGGER.info("STA sensor migration completed: %d entities migrated", migrated_count)
 
 
 async def async_setup_entry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> SharedDataUpdateCoordinator:
     """Set up the device statistics sensors from a config entry."""
 
@@ -426,7 +422,7 @@ async def async_setup_entry(
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
         CONF_STA_SENSOR_TIMEOUT,
-        entry.data.get(CONF_STA_SENSOR_TIMEOUT, DEFAULT_STA_SENSOR_TIMEOUT)
+        entry.data.get(CONF_STA_SENSOR_TIMEOUT, DEFAULT_STA_SENSOR_TIMEOUT),
     )
     scan_interval = timedelta(seconds=timeout)
 
@@ -456,7 +452,10 @@ async def async_setup_entry(
         if sta_coordinators_key not in hass.data[DOMAIN]:
             hass.data[DOMAIN][sta_coordinators_key] = {}
         hass.data[DOMAIN][sta_coordinators_key][entry.entry_id] = coordinator
-        _LOGGER.debug("Stored STA sensor coordinator for %s (tracking_method=uniqueid)", entry.data[CONF_HOST])
+        _LOGGER.debug(
+            "Stored STA sensor coordinator for %s (tracking_method=uniqueid)",
+            entry.data[CONF_HOST],
+        )
 
     # Add update listener for dynamic device creation
     async def _handle_coordinator_update_async():
@@ -486,14 +485,13 @@ async def async_setup_entry(
                     else:
                         unique_id = f"{entry.data[CONF_HOST]}_sensor_{mac_address}_{description.key}"
 
-                    existing_entity_id = entity_registry.async_get_entity_id(
-                        "sensor", DOMAIN, unique_id
-                    )
+                    existing_entity_id = entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id)
 
                     if existing_entity_id:
                         _LOGGER.debug(
                             "STA sensor entity %s already exists with entity_id %s, skipping creation",
-                            unique_id, existing_entity_id
+                            unique_id,
+                            existing_entity_id,
                         )
                         continue
 
@@ -505,27 +503,33 @@ async def async_setup_entry(
 
                 # Only add sensors that don't already exist and have data
                 if device_sensors_to_add:
-                    new_entities.extend([
-                        DeviceStatisticsSensor(coordinator, description, mac_address)
-                        for description in device_sensors_to_add
-                    ])
+                    new_entities.extend(
+                        [
+                            DeviceStatisticsSensor(coordinator, description, mac_address)
+                            for description in device_sensors_to_add
+                        ]
+                    )
 
                 coordinator.known_devices.add(mac_address)
 
             # Add new entities only if there are any
             if new_entities:
                 async_add_entities(new_entities, True)
-                _LOGGER.info("Created %d STA sensor entities for %d new devices",
-                             len(new_entities), len(new_devices))
+                _LOGGER.info(
+                    "Created %d STA sensor entities for %d new devices",
+                    len(new_entities),
+                    len(new_devices),
+                )
             else:
-                _LOGGER.debug("No new STA sensor entities to create for %d devices (all already exist or no data)",
-                              len(new_devices))
+                _LOGGER.debug(
+                    "No new STA sensor entities to create for %d devices (all already exist or no data)",
+                    len(new_devices),
+                )
 
         # Handle removed devices - remove entities for devices that no longer exist
         if removed_devices := coordinator.known_devices - current_devices:
             for mac_address in removed_devices:
                 coordinator.known_devices.discard(mac_address)
-
 
     # Perform first refresh
     await coordinator.async_config_entry_first_refresh()
@@ -542,9 +546,7 @@ async def async_setup_entry(
             for description in SENSOR_DESCRIPTIONS:
                 mapping = SENSOR_VALUE_MAPPING.get(description.key)
                 if mapping and _has_required_data(device_data, mapping.data_keys):
-                    initial_entities.append(
-                        DeviceStatisticsSensor(coordinator, description, mac_address)
-                    )
+                    initial_entities.append(DeviceStatisticsSensor(coordinator, description, mac_address))
 
     # Add initial entities if any
     if initial_entities:
@@ -567,10 +569,10 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
     """Representation of a device statistics sensor."""
 
     def __init__(
-            self,
-            coordinator: SharedDataUpdateCoordinator,
-            description: SensorEntityDescription,
-            mac_address: str,
+        self,
+        coordinator: SharedDataUpdateCoordinator,
+        description: SensorEntityDescription,
+        mac_address: str,
     ) -> None:
         """Initialize the device statistics sensor."""
         super().__init__(coordinator)
@@ -694,7 +696,7 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
             if hostname and hostname != self._mac_address and hostname != self._mac_address.upper() and hostname != "*":
                 # If hostname looks like a domain name, use it directly
                 if "." in hostname:
-                    return hostname.split('.')[0]
+                    return hostname.split(".")[0]
                 else:
                     return hostname
             else:
@@ -702,15 +704,12 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
                 ip_address = device_data.get("ip_address", "")
                 if ip_address and ip_address != "Unknown IP":
                     return ip_address
-        return self._mac_address.replace(':', '')
+        return self._mac_address.replace(":", "")
 
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
-        if not (
-                self.coordinator.last_update_success
-                and self.coordinator.data is not None
-        ):
+        if not (self.coordinator.last_update_success and self.coordinator.data is not None):
             return False
 
         # Check if sensor has the required data to show a value
@@ -781,7 +780,12 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
                         if value is not None:  # Only add attribute if value is not None
                             attributes[attr_key] = value
                 except (KeyError, TypeError, ValueError) as exc:
-                    _LOGGER.debug("Error getting attribute %s for %s: %s", attr_key, self._mac_address, exc)
+                    _LOGGER.debug(
+                        "Error getting attribute %s for %s: %s",
+                        attr_key,
+                        self._mac_address,
+                        exc,
+                    )
                     continue
 
         return attributes

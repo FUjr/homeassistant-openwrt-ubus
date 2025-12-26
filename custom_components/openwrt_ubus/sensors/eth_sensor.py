@@ -116,9 +116,9 @@ SENSOR_DESCRIPTIONS = [
 
 
 async def async_setup_entry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> SharedDataUpdateCoordinator:
     """Set up the OpenWrt network interface sensors."""
 
@@ -129,7 +129,7 @@ async def async_setup_entry(
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
         CONF_SYSTEM_SENSOR_TIMEOUT,
-        entry.data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT)
+        entry.data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT),
     )
     scan_interval = timedelta(seconds=timeout)
 
@@ -195,10 +195,10 @@ class NetworkInterfaceSensor(CoordinatorEntity, SensorEntity):
     """Representation of a OpenWrt network interface sensor."""
 
     def __init__(
-            self,
-            coordinator: SharedDataUpdateCoordinator,
-            description: SensorEntityDescription,
-            device_name: str,
+        self,
+        coordinator: SharedDataUpdateCoordinator,
+        description: SensorEntityDescription,
+        device_name: str,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
@@ -265,8 +265,14 @@ class NetworkInterfaceSensor(CoordinatorEntity, SensorEntity):
         elif self.entity_description.key == "mtu":
             return device_data.get("mtu", 0)
         elif self.entity_description.key in [
-            "rx_bytes", "tx_bytes", "rx_packets", "tx_packets",
-            "rx_errors", "tx_errors", "rx_dropped", "tx_dropped"
+            "rx_bytes",
+            "tx_bytes",
+            "rx_packets",
+            "tx_packets",
+            "rx_errors",
+            "tx_errors",
+            "rx_dropped",
+            "tx_dropped",
         ]:
             stats = device_data.get("statistics", {})
             return stats.get(self.entity_description.key, 0)
@@ -297,35 +303,41 @@ class NetworkInterfaceSensor(CoordinatorEntity, SensorEntity):
         # Add flow control info if available
         if "flow-control" in device_data:
             flow_control = device_data["flow-control"]
-            attrs.update({
-                "flow_control_autoneg": flow_control.get("autoneg", False),
-                "flow_control_supported": flow_control.get("supported", []),
-                "flow_control_advertising": flow_control.get("link-advertising", []),
-                "flow_control_partner_advertising": flow_control.get("link-partner-advertising", []),
-                "flow_control_negotiated": flow_control.get("negotiated", []),
-            })
+            attrs.update(
+                {
+                    "flow_control_autoneg": flow_control.get("autoneg", False),
+                    "flow_control_supported": flow_control.get("supported", []),
+                    "flow_control_advertising": flow_control.get("link-advertising", []),
+                    "flow_control_partner_advertising": flow_control.get("link-partner-advertising", []),
+                    "flow_control_negotiated": flow_control.get("negotiated", []),
+                }
+            )
 
         # Add bridge info if it's a bridge
         if device_data.get("type") == "bridge":
             bridge_attrs = device_data.get("bridge-attributes", {})
-            attrs.update({
-                "bridge_stp": bridge_attrs.get("stp", False),
-                "bridge_priority": bridge_attrs.get("priority", 0),
-                "bridge_ageing_time": bridge_attrs.get("ageing_time", 0),
-                "bridge_hello_time": bridge_attrs.get("hello_time", 1),
-                "bridge_max_age": bridge_attrs.get("max_age", 10),
-                "bridge_forward_delay": bridge_attrs.get("forward_delay", 8),
-                "bridge_igmp_snooping": bridge_attrs.get("igmp_snooping", False),
-                "bridge_members": device_data.get("bridge-members", []),
-            })
+            attrs.update(
+                {
+                    "bridge_stp": bridge_attrs.get("stp", False),
+                    "bridge_priority": bridge_attrs.get("priority", 0),
+                    "bridge_ageing_time": bridge_attrs.get("ageing_time", 0),
+                    "bridge_hello_time": bridge_attrs.get("hello_time", 1),
+                    "bridge_max_age": bridge_attrs.get("max_age", 10),
+                    "bridge_forward_delay": bridge_attrs.get("forward_delay", 8),
+                    "bridge_igmp_snooping": bridge_attrs.get("igmp_snooping", False),
+                    "bridge_members": device_data.get("bridge-members", []),
+                }
+            )
 
         # Add link info if available
         if "link-advertising" in device_data:
-            attrs.update({
-                "link_advertising": device_data.get("link-advertising", []),
-                "link_partner_advertising": device_data.get("link-partner-advertising", []),
-                "link_supported": device_data.get("link-supported", []),
-            })
+            attrs.update(
+                {
+                    "link_advertising": device_data.get("link-advertising", []),
+                    "link_partner_advertising": device_data.get("link-partner-advertising", []),
+                    "link_supported": device_data.get("link-supported", []),
+                }
+            )
 
         # Add conduit for DSA ports
         if "conduit" in device_data:

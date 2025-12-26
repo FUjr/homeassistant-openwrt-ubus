@@ -8,7 +8,13 @@ from datetime import datetime, timedelta
 from typing import Any, Dict
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_IP_ADDRESS, CONF_VERIFY_SSL
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_USERNAME,
+    CONF_IP_ADDRESS,
+    CONF_VERIFY_SSL,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -47,23 +53,23 @@ class SharedUbusDataManager:
         # Get timeout values from configuration (priority: options > data > default)
         system_timeout = entry.options.get(
             CONF_SYSTEM_SENSOR_TIMEOUT,
-            entry.data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT)
+            entry.data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT),
         )
         qmodem_timeout = entry.options.get(
             CONF_QMODEM_SENSOR_TIMEOUT,
-            entry.data.get(CONF_QMODEM_SENSOR_TIMEOUT, DEFAULT_QMODEM_SENSOR_TIMEOUT)
+            entry.data.get(CONF_QMODEM_SENSOR_TIMEOUT, DEFAULT_QMODEM_SENSOR_TIMEOUT),
         )
         sta_timeout = entry.options.get(
             CONF_STA_SENSOR_TIMEOUT,
-            entry.data.get(CONF_STA_SENSOR_TIMEOUT, DEFAULT_STA_SENSOR_TIMEOUT)
+            entry.data.get(CONF_STA_SENSOR_TIMEOUT, DEFAULT_STA_SENSOR_TIMEOUT),
         )
         ap_timeout = entry.options.get(
             CONF_AP_SENSOR_TIMEOUT,
-            entry.data.get(CONF_AP_SENSOR_TIMEOUT, DEFAULT_AP_SENSOR_TIMEOUT)
+            entry.data.get(CONF_AP_SENSOR_TIMEOUT, DEFAULT_AP_SENSOR_TIMEOUT),
         )
         service_timeout = entry.options.get(
             CONF_SERVICE_TIMEOUT,
-            entry.data.get(CONF_SERVICE_TIMEOUT, DEFAULT_SERVICE_TIMEOUT)
+            entry.data.get(CONF_SERVICE_TIMEOUT, DEFAULT_SERVICE_TIMEOUT),
         )
 
         self._update_intervals: Dict[str, timedelta] = {
@@ -83,9 +89,7 @@ class SharedUbusDataManager:
             "dhcp_clients_count": timedelta(seconds=sta_timeout),  # DHCP clients count
             "network_devices": timedelta(seconds=system_timeout),  # Network device status
         }
-        self._update_locks: Dict[str, asyncio.Lock] = {
-            key: asyncio.Lock() for key in self._update_intervals
-        }
+        self._update_locks: Dict[str, asyncio.Lock] = {key: asyncio.Lock() for key in self._update_intervals}
 
         # Initialize ubus clients
         self._ubus_clients: Dict[str, ExtendedUbus] = {}
@@ -109,8 +113,15 @@ class SharedUbusDataManager:
             password = self.entry.data[CONF_PASSWORD]
 
             # Use ExtendedUbus for all client types now
-            client = ExtendedUbus(url, hostname, username, password, session=self._session,
-                                  timeout=API_DEF_TIMEOUT, verify=self.entry.data.get(CONF_VERIFY_SSL, False))
+            client = ExtendedUbus(
+                url,
+                hostname,
+                username,
+                password,
+                session=self._session,
+                timeout=API_DEF_TIMEOUT,
+                verify=self.entry.data.get(CONF_VERIFY_SSL, False),
+            )
 
             # Connect to the client
             try:
@@ -271,8 +282,9 @@ class SharedUbusDataManager:
             _LOGGER.error("Error fetching device statistics: %s", exc)
             raise UpdateFailed(f"Error fetching device statistics: {exc}")
 
-    async def _fetch_hostapd_data(self, mac2name: Dict[str, Dict[str, str]], interface_to_ssid: Dict[str, str]) -> Dict[
-        str, Any]:
+    async def _fetch_hostapd_data(
+        self, mac2name: Dict[str, Dict[str, str]], interface_to_ssid: Dict[str, str]
+    ) -> Dict[str, Any]:
         """Fetch data from hostapd using optimized batch calls."""
         client = await self._get_ubus_client("hostapd")
         try:
@@ -295,13 +307,17 @@ class SharedUbusDataManager:
                 ssid = interface_to_ssid.get(ap_device, ap_device)
                 ap_interface_mapping[ssid] = ap_device
 
-                sta_devices = sta_data_batch[ap_device].get('devices', [])
-                sta_stats = sta_data_batch[ap_device].get('statistics', {})
+                sta_devices = sta_data_batch[ap_device].get("devices", [])
+                sta_stats = sta_data_batch[ap_device].get("statistics", {})
 
                 # Ensure sta_stats is a dictionary (safety check)
                 if not isinstance(sta_stats, dict):
-                    _LOGGER.warning("Expected statistics to be dict for %s, got %s: %s",
-                                    ap_device, type(sta_stats).__name__, sta_stats)
+                    _LOGGER.warning(
+                        "Expected statistics to be dict for %s, got %s: %s",
+                        ap_device,
+                        type(sta_stats).__name__,
+                        sta_stats,
+                    )
                     sta_stats = {}
 
                 for mac in sta_devices:
@@ -330,21 +346,25 @@ class SharedUbusDataManager:
                         if isinstance(stats_data, dict):
                             device_info.update(stats_data)
                         else:
-                            _LOGGER.warning("Expected stats data to be dict for MAC %s, got %s",
-                                            normalized_mac, type(stats_data).__name__)
+                            _LOGGER.warning(
+                                "Expected stats data to be dict for MAC %s, got %s",
+                                normalized_mac,
+                                type(stats_data).__name__,
+                            )
 
                     device_statistics[normalized_mac] = device_info
 
             return {
                 "device_statistics": device_statistics,
-                "ap_interface_mapping": ap_interface_mapping
+                "ap_interface_mapping": ap_interface_mapping,
             }
         except Exception as exc:
             _LOGGER.error("Error fetching hostapd data: %s", exc)
             raise UpdateFailed(f"Error fetching hostapd data: {exc}")
 
-    async def _fetch_iwinfo_data(self, mac2name: Dict[str, Dict[str, str]], interface_to_ssid: Dict[str, str]) -> Dict[
-        str, Any]:
+    async def _fetch_iwinfo_data(
+        self, mac2name: Dict[str, Dict[str, str]], interface_to_ssid: Dict[str, str]
+    ) -> Dict[str, Any]:
         """Fetch data from iwinfo using optimized batch calls."""
         client = await self._get_ubus_client("iwinfo")
         try:
@@ -371,13 +391,17 @@ class SharedUbusDataManager:
                 ap_interface_mapping[ssid] = ap_device
 
                 device_data = sta_data_batch[ap_device]
-                sta_devices = device_data.get('devices', [])
-                sta_stats = device_data.get('statistics', {})
+                sta_devices = device_data.get("devices", [])
+                sta_stats = device_data.get("statistics", {})
 
                 # Ensure sta_stats is a dictionary (safety check)
                 if not isinstance(sta_stats, dict):
-                    _LOGGER.warning("Expected statistics to be dict for %s, got %s: %s",
-                                    ap_device, type(sta_stats).__name__, sta_stats)
+                    _LOGGER.warning(
+                        "Expected statistics to be dict for %s, got %s: %s",
+                        ap_device,
+                        type(sta_stats).__name__,
+                        sta_stats,
+                    )
                     sta_stats = {}
 
                 for mac in sta_devices:
@@ -407,14 +431,17 @@ class SharedUbusDataManager:
                         if isinstance(stats_data, dict):
                             device_info.update(stats_data)
                         else:
-                            _LOGGER.warning("Expected stats data to be dict for MAC %s, got %s",
-                                            normalized_mac, type(stats_data).__name__)
+                            _LOGGER.warning(
+                                "Expected stats data to be dict for MAC %s, got %s",
+                                normalized_mac,
+                                type(stats_data).__name__,
+                            )
 
                     device_statistics[normalized_mac] = device_info
 
             return {
                 "device_statistics": device_statistics,
-                "ap_interface_mapping": ap_interface_mapping
+                "ap_interface_mapping": ap_interface_mapping,
             }
         except AttributeError as exc:
             # Handle specific case where result format is unexpected
@@ -461,7 +488,7 @@ class SharedUbusDataManager:
                                 if mac_upper not in mac2name:
                                     mac2name[mac_upper] = {
                                         "hostname": hosts[3],
-                                        "ip": hosts[2]
+                                        "ip": hosts[2],
                                     }
             elif dhcp_software == "odhcpd":
                 # Get odhcpd leases
@@ -471,13 +498,13 @@ class SharedUbusDataManager:
                         for lease in device.get("leases", []):
                             mac = lease.get("mac", "")
                             if mac and len(mac) == 12:
-                                mac = ":".join(mac[i:i + 2] for i in range(0, len(mac), 2))
+                                mac = ":".join(mac[i : i + 2] for i in range(0, len(mac), 2))
                                 mac_upper = mac.upper()
                                 # Only add if not already in mac2name
                                 if mac_upper not in mac2name:
                                     mac2name[mac_upper] = {
                                         "hostname": lease.get("hostname", ""),
-                                        "ip": lease.get("ip", "")
+                                        "ip": lease.get("ip", ""),
                                     }
         except Exception as exc:
             _LOGGER.warning("Failed to get DHCP MAC to name mapping: %s", exc)
@@ -531,8 +558,7 @@ class SharedUbusDataManager:
             # Handle empty response due to permission issues
             if not result:
                 _LOGGER.warning(
-                    "No network devices data received. "
-                    "Please check OpenWrt permissions for 'network.device' API"
+                    "No network devices data received. Please check OpenWrt permissions for 'network.device' API"
                 )
                 return {"network_devices": {}}
             elif isinstance(result, dict):
@@ -593,8 +619,9 @@ class SharedUbusDataManager:
         # Defensive: If the data_type is not in update_locks, log and raise
         if data_type not in self._update_locks:
             _LOGGER.error(
-                "Requested data_type '%s' is not managed by SharedUbusDataManager. "
-                "Available types: %s", data_type, list(self._update_locks.keys())
+                "Requested data_type '%s' is not managed by SharedUbusDataManager. Available types: %s",
+                data_type,
+                list(self._update_locks.keys()),
             )
             raise ValueError(f"Unknown data type: {data_type}")
 
@@ -634,7 +661,8 @@ class SharedUbusDataManager:
                     # Defensive: This should not happen due to the check above, but log just in case
                     _LOGGER.error(
                         "Unknown data type requested: %s. Available: %s",
-                        data_type, list(self._update_locks.keys())
+                        data_type,
+                        list(self._update_locks.keys()),
                     )
                     raise ValueError(f"Unknown data type: {data_type}")
 
@@ -667,7 +695,8 @@ class SharedUbusDataManager:
         if unknown_types:
             _LOGGER.error(
                 "Requested unknown data types in get_combined_data: %s. Known types: %s",
-                list(unknown_types), list(known_types)
+                list(unknown_types),
+                list(known_types),
             )
         # Only process known types
         data_types = [dt for dt in data_types if dt in known_types]
@@ -741,12 +770,12 @@ class SharedDataUpdateCoordinator(DataUpdateCoordinator):
     """Coordinator that uses shared data manager."""
 
     def __init__(
-            self,
-            hass: HomeAssistant,
-            data_manager: SharedUbusDataManager,
-            data_types: list[str],
-            name: str,
-            update_interval: timedelta,
+        self,
+        hass: HomeAssistant,
+        data_manager: SharedUbusDataManager,
+        data_types: list[str],
+        name: str,
+        update_interval: timedelta,
     ):
         """Initialize the coordinator."""
         super().__init__(
@@ -766,13 +795,16 @@ class SharedDataUpdateCoordinator(DataUpdateCoordinator):
             if not data:
                 _LOGGER.debug(
                     "SharedDataUpdateCoordinator '%s' got no data for types: %s",
-                    self.name, self.data_types
+                    self.name,
+                    self.data_types,
                 )
             return data
         except Exception as exc:
             _LOGGER.error(
                 "Error in SharedDataUpdateCoordinator '%s' for types %s: %s",
-                self.name, self.data_types, exc
+                self.name,
+                self.data_types,
+                exc,
             )
             raise UpdateFailed(f"Error communicating with API: {exc}")
 
