@@ -13,7 +13,13 @@ from homeassistant.components.device_tracker import (
     SourceType,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_VERIFY_SSL, CONF_IP_ADDRESS
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_USERNAME,
+    CONF_VERIFY_SSL,
+    CONF_IP_ADDRESS,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -58,10 +64,10 @@ def _generate_unique_id(host: str, mac_address: str, tracking_method: str) -> st
 
 
 async def _migrate_device_tracker_unique_ids(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        old_tracking_method: str,
-        new_tracking_method: str
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    old_tracking_method: str,
+    new_tracking_method: str,
 ) -> None:
     """Migrate device tracker unique_ids when tracking method changes.
 
@@ -79,7 +85,8 @@ async def _migrate_device_tracker_unique_ids(
 
     _LOGGER.info(
         "Migrating device tracker unique_ids from '%s' to '%s'",
-        old_tracking_method, new_tracking_method
+        old_tracking_method,
+        new_tracking_method,
     )
 
     # Get all device tracker entities for this config entry
@@ -112,32 +119,34 @@ async def _migrate_device_tracker_unique_ids(
             continue
 
         # Check if new unique_id already exists
-        existing_entity_id = entity_registry.async_get_entity_id(
-            "device_tracker", DOMAIN, new_unique_id
-        )
+        existing_entity_id = entity_registry.async_get_entity_id("device_tracker", DOMAIN, new_unique_id)
 
         if existing_entity_id and existing_entity_id != entity_entry.entity_id:
             _LOGGER.warning(
                 "Cannot migrate %s to %s: new unique_id already exists for entity %s",
-                old_unique_id, new_unique_id, existing_entity_id
+                old_unique_id,
+                new_unique_id,
+                existing_entity_id,
             )
             continue
 
         # Perform migration
         try:
-            entity_registry.async_update_entity(
-                entity_entry.entity_id,
-                new_unique_id=new_unique_id
-            )
+            entity_registry.async_update_entity(entity_entry.entity_id, new_unique_id=new_unique_id)
             migrated_count += 1
             _LOGGER.debug(
                 "Migrated entity %s: %s → %s",
-                entity_entry.entity_id, old_unique_id, new_unique_id
+                entity_entry.entity_id,
+                old_unique_id,
+                new_unique_id,
             )
         except Exception as exc:
             _LOGGER.error(
                 "Failed to migrate entity %s from %s to %s: %s",
-                entity_entry.entity_id, old_unique_id, new_unique_id, exc
+                entity_entry.entity_id,
+                old_unique_id,
+                new_unique_id,
+                exc,
             )
 
     _LOGGER.info("Migration completed: %d entities migrated", migrated_count)
@@ -150,20 +159,16 @@ PLATFORM_SCHEMA = DEVICE_TRACKER_PLATFORM_SCHEMA.extend(
         vol.Optional(CONF_VERIFY_SSL, default=False): cv.boolean,
         vol.Required(CONF_PASSWORD): cv.string,
         vol.Required(CONF_USERNAME): cv.string,
-        vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(
-            WIRELESS_SOFTWARES
-        ),
-        vol.Optional(CONF_DHCP_SOFTWARE, default=DEFAULT_DHCP_SOFTWARE): vol.In(
-            DHCP_SOFTWARES
-        ),
+        vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(WIRELESS_SOFTWARES),
+        vol.Optional(CONF_DHCP_SOFTWARE, default=DEFAULT_DHCP_SOFTWARE): vol.In(DHCP_SOFTWARES),
     }
 )
 
 
 async def async_setup_entry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        async_add_entities: AddEntitiesCallback,
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up device tracker from a config entry."""
 
@@ -178,11 +183,10 @@ async def async_setup_entry(
     if old_tracking_method is not None and old_tracking_method != tracking_method:
         _LOGGER.info(
             "Tracking method changed from '%s' to '%s', starting migration",
-            old_tracking_method, tracking_method
+            old_tracking_method,
+            tracking_method,
         )
-        await _migrate_device_tracker_unique_ids(
-            hass, entry, old_tracking_method, tracking_method
-        )
+        await _migrate_device_tracker_unique_ids(hass, entry, old_tracking_method, tracking_method)
 
     # Store current tracking method for future comparisons
     hass.data[DOMAIN][tracking_state_key] = tracking_method
@@ -212,7 +216,10 @@ async def async_setup_entry(
         if tracker_coordinators_key not in hass.data[DOMAIN]:
             hass.data[DOMAIN][tracker_coordinators_key] = {}
         hass.data[DOMAIN][tracker_coordinators_key][entry.entry_id] = coordinator
-        _LOGGER.debug("Stored tracker coordinator for %s (tracking_method=uniqueid)", entry.data[CONF_HOST])
+        _LOGGER.debug(
+            "Stored tracker coordinator for %s (tracking_method=uniqueid)",
+            entry.data[CONF_HOST],
+        )
 
     # Initialize known_devices from existing entity registry entries
     await _restore_known_devices_from_registry(hass, entry, coordinator, tracking_method)
@@ -267,10 +274,10 @@ async def async_setup_entry(
 
 
 async def _restore_known_devices_from_registry(
-        hass: HomeAssistant,
-        entry: ConfigEntry,
-        coordinator: SharedDataUpdateCoordinator,
-        tracking_method: str
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator: SharedDataUpdateCoordinator,
+    tracking_method: str,
 ) -> None:
     """Restore known devices from existing entity registry entries."""
     entity_registry = er.async_get(hass)
@@ -298,18 +305,25 @@ async def _restore_known_devices_from_registry(
                     else:
                         _LOGGER.warning(
                             "Cannot parse MAC from unique_id: %s (expected format: {host}_{mac})",
-                            entity_entry.unique_id
+                            entity_entry.unique_id,
                         )
                         continue
 
                 # Don't add to known_devices during restore - let the entity creation flow handle it
                 # This ensures entity objects are created for registry entities
                 # coordinator.known_devices.add(mac_address)
-                _LOGGER.debug("Found device in registry: %s (will create entity object during scan)", mac_address)
+                _LOGGER.debug(
+                    "Found device in registry: %s (will create entity object during scan)",
+                    mac_address,
+                )
 
 
-async def _create_entities_for_devices(hass: HomeAssistant, entry: ConfigEntry,
-                                       coordinator: SharedDataUpdateCoordinator, mac_addresses: set[str]) -> list:
+async def _create_entities_for_devices(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator: SharedDataUpdateCoordinator,
+    mac_addresses: set[str],
+) -> list:
     """Create device tracker entities for the given MAC addresses."""
     entity_registry = er.async_get(hass)
     new_entities = []
@@ -334,28 +348,30 @@ async def _create_entities_for_devices(hass: HomeAssistant, entry: ConfigEntry,
         if tracking_method == "uniqueid":
             # Search for entity with this unique_id across all config entries
             for entity_entry in entity_registry.entities.values():
-                if (entity_entry.domain == "device_tracker" and
-                        entity_entry.platform == DOMAIN and
-                        entity_entry.unique_id == unique_id and
-                        entity_entry.entity_id is not None):  # Not deleted
+                if (
+                    entity_entry.domain == "device_tracker"
+                    and entity_entry.platform == DOMAIN
+                    and entity_entry.unique_id == unique_id
+                    and entity_entry.entity_id is not None
+                ):  # Not deleted
                     existing_entity_id = entity_entry.entity_id
                     _LOGGER.debug(
                         "Found existing entity %s with unique_id %s (config_entry: %s)",
-                        existing_entity_id, unique_id, entity_entry.config_entry_id
+                        existing_entity_id,
+                        unique_id,
+                        entity_entry.config_entry_id,
                     )
                     break
         else:
             # For combined tracking, use normal lookup (should only exist in current config entry)
-            existing_entity_id = entity_registry.async_get_entity_id(
-                "device_tracker", DOMAIN, unique_id
-            )
+            existing_entity_id = entity_registry.async_get_entity_id("device_tracker", DOMAIN, unique_id)
 
         # Always create entity object - HA will handle duplicates via unique_id
         # This is critical: existing entities in registry need active Python objects too!
         if existing_entity_id:
             _LOGGER.debug(
                 "Device tracker entity %s already exists in registry, creating entity object for updates",
-                existing_entity_id
+                existing_entity_id,
             )
 
         # Create device tracker entity (new or existing)
@@ -366,9 +382,16 @@ async def _create_entities_for_devices(hass: HomeAssistant, entry: ConfigEntry,
             new_entities.append(entity)
             coordinator.known_devices.add(mac_address)
             if existing_entity_id:
-                _LOGGER.debug("Created entity object for existing device tracker %s", existing_entity_id)
+                _LOGGER.debug(
+                    "Created entity object for existing device tracker %s",
+                    existing_entity_id,
+                )
             else:
-                _LOGGER.debug("Created new device tracker entity for %s with unique_id %s", mac_address, unique_id)
+                _LOGGER.debug(
+                    "Created new device tracker entity for %s with unique_id %s",
+                    mac_address,
+                    unique_id,
+                )
         except Exception as exc:
             _LOGGER.error("Failed to create entity for device %s: %s", mac_address, exc)
             continue
@@ -388,9 +411,7 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
         self._tracking_method = coordinator.tracking_method
 
         # Generate unique_id based on tracking method
-        self._attr_unique_id = _generate_unique_id(
-            self._host, mac_address, self._tracking_method
-        )
+        self._attr_unique_id = _generate_unique_id(self._host, mac_address, self._tracking_method)
         self._attr_name = None  # Will be set dynamically
         self._attr_entity_registry_enabled_default = True  # Enable by default
 
@@ -430,7 +451,9 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
                     other_host = other_coordinator.data_manager.entry.data[CONF_HOST]
                     _LOGGER.debug(
                         "Device %s found on router %s (not on %s)",
-                        self.mac_address, other_host, self._host
+                        self.mac_address,
+                        other_host,
+                        self._host,
                     )
                     return device_data, other_host
 
@@ -502,10 +525,15 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
                 hostname = device_data.get("hostname")
 
                 # Show hostname if available and meaningful
-                if hostname and hostname != self.mac_address and hostname != self.mac_address.upper() and hostname != "*":
+                if (
+                    hostname
+                    and hostname != self.mac_address
+                    and hostname != self.mac_address.upper()
+                    and hostname != "*"
+                ):
                     # If hostname looks like a domain name, use only the first part
                     if "." in hostname:
-                        return hostname.split('.')[0]
+                        return hostname.split(".")[0]
                     else:
                         return hostname
                 else:
@@ -515,10 +543,10 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
                         return ip_address.replace(".", "_")
                     else:
                         # Fallback to MAC address without colons
-                        return self.mac_address.replace(':', '')
+                        return self.mac_address.replace(":", "")
 
             # Fallback to MAC address if no device data found
-            return self.mac_address.replace(':', '')
+            return self.mac_address.replace(":", "")
 
         # For "combined" tracking method, use the detailed naming with AP/SSID
         connected_router = self._host or "Unknown Router"
@@ -554,10 +582,15 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
         """Return the name of the entity."""
         hostname = self.hostname
 
-        if hostname and hostname != self._attr_mac_address and hostname != self._attr_mac_address.upper() and hostname != "*":
+        if (
+            hostname
+            and hostname != self._attr_mac_address
+            and hostname != self._attr_mac_address.upper()
+            and hostname != "*"
+        ):
             return hostname
 
-        return self._attr_mac_address.replace(':', '')
+        return self._attr_mac_address.replace(":", "")
 
     @property
     def is_connected(self) -> bool:
@@ -571,13 +604,19 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
                 if found_host and found_host != self._host:
                     _LOGGER.debug(
                         "Device %s connection status: %s (on router %s, not %s)",
-                        self.mac_address, connected, found_host, self._host
+                        self.mac_address,
+                        connected,
+                        found_host,
+                        self._host,
                     )
                 else:
                     _LOGGER.debug("Device %s connection status: %s", self.mac_address, connected)
                 return connected
 
-            _LOGGER.debug("Device %s not found in any device statistics, assuming disconnected", self.mac_address)
+            _LOGGER.debug(
+                "Device %s not found in any device statistics, assuming disconnected",
+                self.mac_address,
+            )
             return False
 
         # For combined tracking, use simplified logic from main
@@ -586,7 +625,10 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
             _LOGGER.debug("Device %s connection status: %s", self._attr_mac_address, connected)
             return connected
 
-        _LOGGER.debug("Device %s not found in device statistics, assuming disconnected", self._attr_mac_address)
+        _LOGGER.debug(
+            "Device %s not found in device statistics, assuming disconnected",
+            self._attr_mac_address,
+        )
         return False
 
     @property
@@ -608,21 +650,25 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
         }
 
         if device_data:
-            attributes.update({
-                "name": self._get_device_name(),
-                "ap_device": device_data.get("ap_device", "Unknown AP"),
-                "hostname": device_data.get("hostname", self.mac_address),
-                "connection_type": "wireless",
-                "router": current_router,  # Show router where device is currently connected
-                "ip_address": device_data.get("ip_address", "Unknown IP"),
-            })
+            attributes.update(
+                {
+                    "name": self._get_device_name(),
+                    "ap_device": device_data.get("ap_device", "Unknown AP"),
+                    "hostname": device_data.get("hostname", self.mac_address),
+                    "connection_type": "wireless",
+                    "router": current_router,  # Show router where device is currently connected
+                    "ip_address": device_data.get("ip_address", "Unknown IP"),
+                }
+            )
             # Add SSID if available
             if "ap_ssid" in device_data:
                 attributes["ssid"] = device_data.get("ap_ssid", "Unknown SSID")
         else:
-            attributes.update({
-                "last_seen": "disconnected",
-            })
+            attributes.update(
+                {
+                    "last_seen": "disconnected",
+                }
+            )
 
         return attributes
 

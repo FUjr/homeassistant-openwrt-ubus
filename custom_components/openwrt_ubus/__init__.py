@@ -6,7 +6,13 @@ import logging
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_IP_ADDRESS, CONF_VERIFY_SSL
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_USERNAME,
+    CONF_IP_ADDRESS,
+    CONF_VERIFY_SSL,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
@@ -50,12 +56,8 @@ CONFIG_SCHEMA = vol.Schema(
                 vol.Optional(CONF_VERIFY_SSL, default=False): cv.boolean,
                 vol.Required(CONF_USERNAME): cv.string,
                 vol.Required(CONF_PASSWORD): cv.string,
-                vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(
-                    WIRELESS_SOFTWARES
-                ),
-                vol.Optional(CONF_DHCP_SOFTWARE, default=DEFAULT_DHCP_SOFTWARE): vol.In(
-                    DHCP_SOFTWARES
-                ),
+                vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(WIRELESS_SOFTWARES),
+                vol.Optional(CONF_DHCP_SOFTWARE, default=DEFAULT_DHCP_SOFTWARE): vol.In(DHCP_SOFTWARES),
             }
         )
     },
@@ -86,8 +88,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ip = entry.data.get(CONF_IP_ADDRESS, None)
         url = f"http://{ip if ip else hostname}/ubus"
         session = async_get_clientsession(hass)
-        ubus = ExtendedUbus(url, hostname, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD],
-                            session=session, timeout=API_DEF_TIMEOUT, verify=entry.data.get(CONF_VERIFY_SSL, False))
+        ubus = ExtendedUbus(
+            url,
+            hostname,
+            entry.data[CONF_USERNAME],
+            entry.data[CONF_PASSWORD],
+            session=session,
+            timeout=API_DEF_TIMEOUT,
+            verify=entry.data.get(CONF_VERIFY_SSL, False),
+        )
 
         # Test connection
         session_id = await ubus.connect()
@@ -178,7 +187,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
             async def async_handle_uci_network_interface(call):
                 """Handle openwrt_ubus.uci_call service."""
-                #config = call.data["config"]
+                # config = call.data["config"]
                 section = call.data["section"]
                 option = call.data["option"]
 
@@ -199,7 +208,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # Call UCI uci_network_interface
                 result = await client.uci_network_interface(section, option)
                 _LOGGER.debug("UBUS call %s %s", section, option)
-
 
             async def async_handle_uci_set_commit(call):
                 """Handle openwrt_ubus.uci_set_commit service."""
@@ -230,9 +238,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if services_to_restart:
                     # Handle both string and list inputs
                     service_list = (
-                        services_to_restart
-                        if isinstance(services_to_restart, list)
-                        else [services_to_restart]
+                        services_to_restart if isinstance(services_to_restart, list) else [services_to_restart]
                     )
                     for service_name in service_list:
                         try:
@@ -243,9 +249,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                                 result,
                             )
                         except Exception as exc:
-                            _LOGGER.warning(
-                                "Failed to restart service %s: %s", service_name, exc
-                            )
+                            _LOGGER.warning("Failed to restart service %s: %s", service_name, exc)
 
             hass.services.async_register(
                 DOMAIN,
@@ -264,7 +268,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "uci_network_interface",
                 async_handle_uci_network_interface,
             )
-
 
     except Exception as exc:
         raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {hostname}: {exc}") from exc
@@ -292,35 +295,45 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
     # Check if system sensors are disabled
     system_enabled = entry.options.get(
         CONF_ENABLE_SYSTEM_SENSORS,
-        entry.data.get(CONF_ENABLE_SYSTEM_SENSORS, DEFAULT_ENABLE_SYSTEM_SENSORS)
+        entry.data.get(CONF_ENABLE_SYSTEM_SENSORS, DEFAULT_ENABLE_SYSTEM_SENSORS),
     )
 
     # Check if QModem sensors are disabled
     qmodem_enabled = entry.options.get(
         CONF_ENABLE_QMODEM_SENSORS,
-        entry.data.get(CONF_ENABLE_QMODEM_SENSORS, DEFAULT_ENABLE_QMODEM_SENSORS)
+        entry.data.get(CONF_ENABLE_QMODEM_SENSORS, DEFAULT_ENABLE_QMODEM_SENSORS),
     )
 
     # Check if STA sensors are disabled
     sta_enabled = entry.options.get(
         CONF_ENABLE_STA_SENSORS,
-        entry.data.get(CONF_ENABLE_STA_SENSORS, DEFAULT_ENABLE_STA_SENSORS)
+        entry.data.get(CONF_ENABLE_STA_SENSORS, DEFAULT_ENABLE_STA_SENSORS),
     )
 
     # Check if AP sensors are disabled
     ap_enabled = entry.options.get(
         CONF_ENABLE_AP_SENSORS,
-        entry.data.get(CONF_ENABLE_AP_SENSORS, DEFAULT_ENABLE_AP_SENSORS)
+        entry.data.get(CONF_ENABLE_AP_SENSORS, DEFAULT_ENABLE_AP_SENSORS),
     )
 
-    _LOGGER.debug("Sensor states - System: %s, QModem: %s, STA: %s, AP: %s",
-                  system_enabled, qmodem_enabled, sta_enabled, ap_enabled)
+    _LOGGER.debug(
+        "Sensor states - System: %s, QModem: %s, STA: %s, AP: %s",
+        system_enabled,
+        qmodem_enabled,
+        sta_enabled,
+        ap_enabled,
+    )
 
     # List all current devices for debugging
-    all_devices = [device for device in device_registry.devices.values()
-                   if any(identifier[0] == DOMAIN for identifier in device.identifiers)]
-    _LOGGER.debug("Current devices in registry: %s",
-                  [list(device.identifiers) for device in all_devices])
+    all_devices = [
+        device
+        for device in device_registry.devices.values()
+        if any(identifier[0] == DOMAIN for identifier in device.identifiers)
+    ]
+    _LOGGER.debug(
+        "Current devices in registry: %s",
+        [list(device.identifiers) for device in all_devices],
+    )
 
     # If system sensors are disabled, remove the main router device
     # (this will also remove any via_device dependencies like QModem and STA devices)
@@ -338,7 +351,10 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
             qmodem_identifier = (DOMAIN, f"{host}_qmodem")
             qmodem_device = device_registry.async_get_device(identifiers={qmodem_identifier})
             if qmodem_device:
-                _LOGGER.info("Removing QModem device %s (QModem sensors disabled)", f"{host}_qmodem")
+                _LOGGER.info(
+                    "Removing QModem device %s (QModem sensors disabled)",
+                    f"{host}_qmodem",
+                )
                 device_registry.async_remove_device(qmodem_device.id)
             else:
                 _LOGGER.debug("QModem device not found for removal: %s", f"{host}_qmodem")
@@ -358,15 +374,21 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
                     if via_device and (DOMAIN, host) in via_device.identifiers:
                         # This device is connected via the main router, check if it's a STA device
                         for identifier in device.identifiers:
-                            if (identifier[0] == DOMAIN and identifier[1] != host and
-                                    identifier[1] != f"{host}_qmodem" and
-                                    not identifier[1].startswith(f"{host}_ap_") and
-                                    not identifier[1].endswith("_br-lan") and
-                                    not identifier[1].endswith("_lan") and
-                                    not identifier[1].endswith("_wan") and
-                                    not identifier[1].endswith("_eth0")):
+                            if (
+                                identifier[0] == DOMAIN
+                                and identifier[1] != host
+                                and identifier[1] != f"{host}_qmodem"
+                                and not identifier[1].startswith(f"{host}_ap_")
+                                and not identifier[1].endswith("_br-lan")
+                                and not identifier[1].endswith("_lan")
+                                and not identifier[1].endswith("_wan")
+                                and not identifier[1].endswith("_eth0")
+                            ):
                                 # This is a STA device (not the main router, QModem, AP device, or network interface)
-                                _LOGGER.info("Removing STA device %s (STA sensors disabled)", identifier[1])
+                                _LOGGER.info(
+                                    "Removing STA device %s (STA sensors disabled)",
+                                    identifier[1],
+                                )
                                 device_registry.async_remove_device(device.id)
                                 removed_count += 1
                                 break
@@ -378,8 +400,7 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
             # Find all AP devices (devices with identifiers starting with host_ap_)
             for device in list(device_registry.devices.values()):  # Use list() to avoid modification during iteration
                 for identifier in device.identifiers:
-                    if (identifier[0] == DOMAIN and
-                            identifier[1].startswith(f"{host}_ap_")):
+                    if identifier[0] == DOMAIN and identifier[1].startswith(f"{host}_ap_"):
                         # This is an AP device
                         _LOGGER.info("Removing AP device %s (AP sensors disabled)", identifier[1])
                         device_registry.async_remove_device(device.id)
@@ -408,7 +429,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if DOMAIN in hass.data and "coordinators" in hass.data[DOMAIN]:
             coordinators = hass.data[DOMAIN]["coordinators"]
             for coordinator in coordinators:
-                if hasattr(coordinator, 'async_shutdown'):
+                if hasattr(coordinator, "async_shutdown"):
                     try:
                         await coordinator.async_shutdown()
                     except Exception as exc:
@@ -430,15 +451,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-async def async_remove_config_entry_device(
-        _: HomeAssistant, entry: ConfigEntry, device_entry: dr.DeviceEntry
-) -> bool:
+async def async_remove_config_entry_device(_: HomeAssistant, entry: ConfigEntry, device_entry: dr.DeviceEntry) -> bool:
     """Handle device removal."""
     host = entry.data[CONF_HOST]
     for identifier in device_entry.identifiers:
         unique_id = str(identifier[1])
         if str(identifier[0]) == DOMAIN and not (
-                unique_id == host or "_ap_" in unique_id or unique_id.endswith("_qmodem")
+            unique_id == host or "_ap_" in unique_id or unique_id.endswith("_qmodem")
         ):
             return True
     return False

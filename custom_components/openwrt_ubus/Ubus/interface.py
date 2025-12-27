@@ -24,7 +24,10 @@ from .const import (
     API_UBUS_RPC_SESSION,
     HTTP_STATUS_OK,
     UBUS_ERROR_SUCCESS,
-    API_UBUS_RPC_SESSION_EXPIRES, _get_error_message, API_SESSION_METHOD_DESTROY, API_SESSION_METHOD_LIST,
+    API_UBUS_RPC_SESSION_EXPIRES,
+    _get_error_message,
+    API_SESSION_METHOD_DESTROY,
+    API_SESSION_METHOD_LIST,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,12 +35,12 @@ _LOGGER = logging.getLogger(__name__)
 
 class PreparedCall:
     def __init__(
-            self,
-            rpc_method: str,
-            subsystem: str | None = None,
-            method: str | None = None,
-            params: dict | None = None,
-            rpc_id: str | None = None,
+        self,
+        rpc_method: str,
+        subsystem: str | None = None,
+        method: str | None = None,
+        params: dict | None = None,
+        rpc_id: str | None = None,
     ):
         self.rpc_method = rpc_method
         self.subsystem = subsystem
@@ -48,6 +51,7 @@ class PreparedCall:
 
 class RPCError(RuntimeError):
     """Custom exception for RPC errors."""
+
     pass
 
 
@@ -55,14 +59,14 @@ class Ubus:
     """Interacts with the OpenWrt ubus API."""
 
     def __init__(
-            self,
-            url,
-            hostname: str,
-            username,
-            password,
-            session: aiohttp.ClientSession,
-            timeout,
-            verify,
+        self,
+        url,
+        hostname: str,
+        username,
+        password,
+        session: aiohttp.ClientSession,
+        timeout,
+        verify,
     ):
         """Init OpenWrt ubus API."""
         self.url = url
@@ -104,11 +108,11 @@ class Ubus:
             await self.connect()
 
     async def api_call(
-            self,
-            rpc_method: str,
-            subsystem: str | None = None,
-            method: str | None = None,
-            params: dict | None = None,
+        self,
+        rpc_method: str,
+        subsystem: str | None = None,
+        method: str | None = None,
+        params: dict | None = None,
     ) -> dict | list | None:
         """Perform API call."""
         await self._ensure_session_is_valid()
@@ -153,8 +157,11 @@ class Ubus:
             rpc_calls.append(rpc_call)
 
         response = await self.session.post(
-            url=self.url, server_hostname=self.hostname,
-            data=json.dumps(rpc_calls), timeout=self.timeout, verify_ssl=self.verify
+            url=self.url,
+            server_hostname=self.hostname,
+            data=json.dumps(rpc_calls),
+            timeout=self.timeout,
+            verify_ssl=self.verify,
         )
 
         if response.status != HTTP_STATUS_OK:
@@ -191,7 +198,7 @@ class Ubus:
                             subsystem,
                             method,
                             error_message,
-                            error_code
+                            error_code,
                         )
                         _append_result(
                             PermissionError(
@@ -205,7 +212,7 @@ class Ubus:
                             subsystem,
                             method,
                             error_message,
-                            error_code
+                            error_code,
                         )
                         _append_result(
                             ConnectionError(
@@ -262,11 +269,11 @@ class Ubus:
             raise ConnectionError(f"Unexpected API response format: {responses}")
 
     async def _api_call(
-            self,
-            rpc_method: str,
-            subsystem: str | None = None,
-            method: str | None = None,
-            params: dict | None = None,
+        self,
+        rpc_method: str,
+        subsystem: str | None = None,
+        method: str | None = None,
+        params: dict | None = None,
     ) -> dict | list | None:
         if self.debug_api:
             _LOGGER.debug(
@@ -277,14 +284,16 @@ class Ubus:
                 params,
             )
 
-        results = await self._batch_call([
-            PreparedCall(
-                rpc_method=rpc_method,
-                subsystem=subsystem,
-                method=method,
-                params=params,
-            ),
-        ])
+        results = await self._batch_call(
+            [
+                PreparedCall(
+                    rpc_method=rpc_method,
+                    subsystem=subsystem,
+                    method=method,
+                    params=params,
+                ),
+            ]
+        )
         if results is None:
             return None
 
