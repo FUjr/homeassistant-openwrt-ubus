@@ -169,7 +169,7 @@ cat > /usr/share/rpcd/acl.d/root.json << 'EOF'
     "description": "Home Assistant access",
     "read": {
       "ubus": {
-        "session": [ "access", "login" ],
+        "session": [ "access", "login", "list" ],
         "system": [ "board", "info" ],
         "iwinfo": [ "devices", "info", "assoclist" ],
         "hostapd.*": [ "*" ],
@@ -182,6 +182,7 @@ cat > /usr/share/rpcd/acl.d/root.json << 'EOF'
         "rc": [ "list", "init" ]
       },
       "file": {
+        "/proc/stat": [ "read" ],
         "/etc/ethers": [ "read" ],
         "/tmp/dhcp.leases": [ "read" ],
         "/var/dhcp.leases": [ "read" ]
