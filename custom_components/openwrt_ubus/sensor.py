@@ -20,8 +20,16 @@ from .const import (
     DEFAULT_ENABLE_SYSTEM_SENSORS,
     DEFAULT_ENABLE_AP_SENSORS,
     DEFAULT_ENABLE_ETH_SENSORS,
+    DEFAULT_ENABLE_MWAN3_SENSORS,
 )
-from .sensors import system_sensor, qmodem_sensor, sta_sensor, ap_sensor, eth_sensor
+from .sensors import (
+    system_sensor,
+    qmodem_sensor,
+    sta_sensor,
+    ap_sensor,
+    eth_sensor,
+    mwan3_sensor,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +58,12 @@ SENSOR_MODULES = [
         "config_key": CONF_ENABLE_AP_SENSORS,
         "default": DEFAULT_ENABLE_AP_SENSORS,
         "name": "ap_sensor",
+    },
+    {
+        "module": mwan3_sensor,
+        "config_key": "enable_mwan3_sensors",
+        "default": DEFAULT_ENABLE_MWAN3_SENSORS,
+        "name": "mwan3_sensor",
     },
     {
         "module": eth_sensor,
@@ -89,7 +103,6 @@ async def async_setup_entry(
             # Check if module has async_setup_entry function
             if hasattr(module, "async_setup_entry"):
                 _LOGGER.debug("Loading sensor module: %s", module_name)
-
                 try:
                     # Call the module's setup function
                     coordinator = await module.async_setup_entry(hass, entry, async_add_entities)

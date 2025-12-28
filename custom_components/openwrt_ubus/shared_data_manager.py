@@ -27,11 +27,16 @@ from .const import (
     CONF_QMODEM_SENSOR_TIMEOUT,
     CONF_STA_SENSOR_TIMEOUT,
     CONF_AP_SENSOR_TIMEOUT,
+    CONF_MWAN3_SENSOR_TIMEOUT,
     CONF_SERVICE_TIMEOUT,
+    DOMAIN,
+    DEFAULT_DHCP_SOFTWARE,
+    DEFAULT_WIRELESS_SOFTWARE,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
     DEFAULT_STA_SENSOR_TIMEOUT,
     DEFAULT_AP_SENSOR_TIMEOUT,
+    DEFAULT_MWAN3_SENSOR_TIMEOUT,
     DEFAULT_SERVICE_TIMEOUT,
 )
 from .extended_ubus import ExtendedUbus
@@ -71,12 +76,17 @@ class SharedUbusDataManager:
             CONF_SERVICE_TIMEOUT,
             entry.data.get(CONF_SERVICE_TIMEOUT, DEFAULT_SERVICE_TIMEOUT),
         )
+        mwan3_timeout = entry.options.get(
+            CONF_MWAN3_SENSOR_TIMEOUT,
+            entry.data.get(CONF_MWAN3_SENSOR_TIMEOUT, DEFAULT_MWAN3_SENSOR_TIMEOUT),
+        )
 
         self._update_intervals: Dict[str, timedelta] = {
             "system_info": timedelta(seconds=system_timeout),
             "system_stat": timedelta.min,  # /proc/stat changes very frequently
             "system_board": timedelta(seconds=system_timeout * 2),  # Board info changes less frequently
             "qmodem_info": timedelta(seconds=qmodem_timeout),
+            "mwan3_status": timedelta(seconds=mwan3_timeout),
             "device_statistics": timedelta(seconds=sta_timeout),
             "dhcp_leases": timedelta(seconds=sta_timeout),
             "hostapd_clients": timedelta(seconds=sta_timeout),
@@ -198,6 +208,17 @@ class SharedUbusDataManager:
         except Exception as exc:
             _LOGGER.debug("Error fetching QModem info: %s", exc)
             return {"qmodem_info": None}
+
+    async def _fetch_mwan3_status(self) -> Dict[str, Any]:
+        """Fetch MWAN3 status information if available."""
+        client = await self._get_ubus_client("mwan3")
+        try:
+            mwan3_status = await client.get_mwan3_status()
+            _LOGGER.debug("MWAN3 data fetched successfully")
+            return {"mwan3_status": mwan3_status}
+        except Exception as exc:
+            _LOGGER.debug("Error fetching MWAN3 status: %s", exc)
+            return {"mwan3_status": None}
 
     async def _fetch_hostapd_available(self) -> Dict[str, Any]:
         """Check if hostapd is available via ubus list."""
@@ -639,6 +660,8 @@ class SharedUbusDataManager:
                     data = await self._fetch_system_board()
                 elif data_type == "qmodem_info":
                     data = await self._fetch_qmodem_info()
+                elif data_type == "mwan3_status":
+                    data = await self._fetch_mwan3_status()
                 elif data_type == "hostapd_available":
                     data = await self._fetch_hostapd_available()
                 elif data_type == "device_statistics":

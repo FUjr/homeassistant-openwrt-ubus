@@ -17,6 +17,7 @@ from .const import (
     API_SUBSYS_SYSTEM,
     API_SUBSYS_UCI,
     API_SUBSYS_QMODEM,
+    API_SUBSYS_MWAN3,
     API_SUBSYS_RC,
     API_SUBSYS_WIRELESS,
     API_METHOD_BOARD,
@@ -25,6 +26,7 @@ from .const import (
     API_METHOD_GET_CLIENTS,
     API_METHOD_GET_STA,
     API_METHOD_GET_QMODEM,
+    API_METHOD_GET_MWAN3,
     API_METHOD_INFO,
     API_METHOD_READ,
     API_METHOD_DEL_CLIENT,
@@ -329,6 +331,14 @@ class ExtendedUbus(Ubus):
     async def get_qmodem_info(self):
         """Get QModem info."""
         return await self.api_call(API_RPC_CALL, API_SUBSYS_QMODEM, API_METHOD_GET_QMODEM)
+
+    async def list_mwan3(self):
+        """List available mwan3 subsystems."""
+        return await self.api_call(API_RPC_LIST, API_SUBSYS_MWAN3)
+
+    async def get_mwan3_status(self):
+        """Get MWAN3 status."""
+        return await self.api_call(API_RPC_CALL, API_SUBSYS_MWAN3, API_METHOD_GET_MWAN3)
 
     async def get_system_method(self, method):
         """Get system method."""

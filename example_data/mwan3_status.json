@@ -1,0 +1,232 @@
+{
+	"interfaces": {
+		"wan": {
+			"age": 5,
+			"online": 28,
+			"offline": 0,
+			"uptime": 757380,
+			"score": 7,
+			"lost": 0,
+			"turn": 3,
+			"status": "online",
+			"enabled": true,
+			"running": true,
+			"tracking": "active",
+			"up": true,
+			"track_ip": [
+				{
+					"ip": "8.8.4.4",
+					"status": "skipped",
+					"latency": 0,
+					"packetloss": 0
+				},
+				{
+					"ip": "8.8.8.8",
+					"status": "up",
+					"latency": 0,
+					"packetloss": 0
+				}
+			]
+		},
+		"wan_tether": {
+			"age": 1,
+			"online": 8,
+			"offline": 0,
+			"uptime": 346039,
+			"score": 10,
+			"lost": 0,
+			"turn": 2,
+			"status": "online",
+			"enabled": true,
+			"running": true,
+			"tracking": "active",
+			"up": true,
+			"track_ip": [
+				{
+					"ip": "8.8.4.4",
+					"status": "skipped",
+					"latency": 0,
+					"packetloss": 0
+				},
+				{
+					"ip": "8.8.8.8",
+					"status": "up",
+					"latency": 0,
+					"packetloss": 0
+				}
+			]
+		},
+		"henet": {
+			"age": 0,
+			"online": 0,
+			"offline": 0,
+			"uptime": 0,
+			"score": 0,
+			"lost": 0,
+			"turn": 0,
+			"status": "disabled",
+			"enabled": true,
+			"running": false,
+			"tracking": "paused",
+			"up": false,
+			"track_ip": [
+
+			]
+		},
+		"tailscale0": {
+			"age": 8,
+			"online": 28,
+			"offline": 0,
+			"uptime": 757389,
+			"score": 10,
+			"lost": 0,
+			"turn": 3,
+			"status": "online",
+			"enabled": true,
+			"running": true,
+			"tracking": "active",
+			"up": true,
+			"track_ip": [
+				{
+					"ip": "100.122.32.67",
+					"status": "up",
+					"latency": 0,
+					"packetloss": 0
+				}
+			]
+		},
+		"wan_starlink": {
+			"age": 0,
+			"online": 0,
+			"offline": 0,
+			"uptime": 0,
+			"score": 0,
+			"lost": 0,
+			"turn": 0,
+			"status": "disabled",
+			"enabled": true,
+			"running": false,
+			"tracking": "paused",
+			"up": false,
+			"track_ip": [
+
+			]
+		}
+	},
+	"connected": {
+		"ipv4": [
+			"10.42.7.255",
+			"172.25.42.0/24",
+			"192.168.62.255",
+			"10.42.8.1",
+			"10.42.4.0/22",
+			"10.42.9.0/24",
+			"192.168.62.141",
+			"198.51.100.161",
+			"127.0.0.0/8",
+			"192.168.200.161",
+			"10.42.9.255",
+			"10.42.9.1",
+			"10.42.0.1",
+			"172.17.0.0/16",
+			"127.0.0.1",
+			"192.168.62.0/24",
+			"10.42.0.0/22",
+			"10.42.4.1",
+			"172.17.255.255",
+			"192.168.200.255",
+			"224.0.0.0/3",
+			"10.42.8.0/24",
+			"127.255.255.255",
+			"192.168.200.0/24",
+			"172.17.0.1",
+			"10.42.3.255",
+			"172.25.42.4",
+			"100.80.215.95",
+			"10.42.8.255"
+		],
+		"ipv6": [
+			"fe80::/64",
+			"fd7a:115c:b1e0::4201:d75f"
+		]
+	},
+	"policies": {
+		"ipv4": {
+			"blackhole": [
+
+			],
+			"henet_only": [
+
+			],
+			"main_table": [
+
+			],
+			"starlink_only": [
+
+			],
+			"tailscale_only": [
+				{
+					"interface": "tailscale0",
+					"percent": 100
+				}
+			],
+			"tether_only": [
+				{
+					"interface": "wan_tether",
+					"percent": 100
+				}
+			],
+			"wan_failsafe": [
+				{
+					"interface": "wan",
+					"percent": 100
+				}
+			],
+			"wan_only": [
+				{
+					"interface": "wan",
+					"percent": 100
+				}
+			],
+			"wt_split": [
+				{
+					"interface": "wan_tether",
+					"percent": 1
+				},
+				{
+					"interface": "wan",
+					"percent": 99
+				}
+			]
+		},
+		"ipv6": {
+			"blackhole": [
+
+			],
+			"henet_only": [
+
+			],
+			"main_table": [
+
+			],
+			"starlink_only": [
+
+			],
+			"tailscale_only": [
+
+			],
+			"tether_only": [
+
+			],
+			"wan_failsafe": [
+
+			],
+			"wan_only": [
+
+			],
+			"wt_split": [
+
+			]
+		}
+	}
+}
