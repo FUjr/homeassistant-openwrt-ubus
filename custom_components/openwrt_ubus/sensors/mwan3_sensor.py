@@ -16,6 +16,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTime, CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_registry as er
@@ -306,6 +307,16 @@ async def async_setup_entry(
     # Fetch initial data to potentially create initial entities
     await coordinator.async_config_entry_first_refresh()
 
+    host = coordinator.data_manager.entry.data[CONF_HOST]
+    device_registry = dr.async_get(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{host}_mwan3")},
+        name=f"{host} MWAN3 Interfaces and Policies",
+        manufacturer="OpenWrt",
+        via_device=(DOMAIN, host),  # Link to main router device
+    )
+
     # Create initial entities for existing interfaces and policies
     initial_entities = []
 
@@ -388,7 +399,7 @@ class MWAN3InterfaceSensor(CoordinatorEntity, SensorEntity):
             manufacturer="OpenWrt",
             model="MWAN3 Interface",
             configuration_url=f"http://{self._host}",
-            via_device=(DOMAIN, self._host),
+            via_device=(DOMAIN, f"{self._host}_mwan3"),
         )
 
     @property
@@ -540,7 +551,7 @@ class MWAN3PolicySensor(CoordinatorEntity, SensorEntity):
             manufacturer="OpenWrt",
             model="MWAN3 Policy",
             configuration_url=f"http://{self._host}",
-            via_device=(DOMAIN, self._host),
+            via_device=(DOMAIN, f"{self._host}_mwan3"),
         )
 
     @property

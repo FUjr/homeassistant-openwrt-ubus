@@ -27,6 +27,7 @@ from .const import (
     CONF_ENABLE_STA_SENSORS,
     CONF_ENABLE_SYSTEM_SENSORS,
     CONF_ENABLE_AP_SENSORS,
+    CONF_ENABLE_ETH_SENSORS,
     CONF_ENABLE_MWAN3_SENSORS,
     CONF_ENABLE_SERVICE_CONTROLS,
     CONF_SELECTED_SERVICES,
@@ -36,6 +37,7 @@ from .const import (
     DEFAULT_ENABLE_STA_SENSORS,
     DEFAULT_ENABLE_SYSTEM_SENSORS,
     DEFAULT_ENABLE_AP_SENSORS,
+    DEFAULT_ENABLE_ETH_SENSORS,
     DEFAULT_ENABLE_MWAN3_SENSORS,
     DEFAULT_ENABLE_SERVICE_CONTROLS,
     DEFAULT_SELECTED_SERVICES,
@@ -331,6 +333,12 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
         entry.data.get(CONF_ENABLE_AP_SENSORS, DEFAULT_ENABLE_AP_SENSORS),
     )
 
+    # Check if eth sensors are disabled
+    eth_enabled = entry.options.get(
+        CONF_ENABLE_ETH_SENSORS,
+        entry.data.get(CONF_ENABLE_ETH_SENSORS, DEFAULT_ENABLE_ETH_SENSORS),
+    )
+
     # Check if MWAN3 sensors are disabled
     mwan3_enabled = entry.options.get(
         CONF_ENABLE_MWAN3_SENSORS,
@@ -338,11 +346,12 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
     )
 
     _LOGGER.debug(
-        "Sensor states - System: %s, QModem: %s, STA: %s, AP: %s, MWAN3: %s",
+        "Sensor states - System: %s, QModem: %s, STA: %s, AP: %s, ETH: %s, MWAN3: %s",
         system_enabled,
         qmodem_enabled,
         sta_enabled,
         ap_enabled,
+        eth_enabled,
         mwan3_enabled,
     )
 
@@ -400,12 +409,9 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
                                 identifier[0] == DOMAIN
                                 and identifier[1] != host
                                 and identifier[1] != f"{host}_qmodem"
-                                and not identifier[1].startswith(f"{host}_ap_")
-                                and not identifier[1].endswith("_br-lan")
-                                and not identifier[1].endswith("_lan")
-                                and not identifier[1].endswith("_wan")
-                                and not identifier[1].endswith("_eth0")
-                                and not identifier[1].startswith(f"{host}_mwan3_")
+                                and identifier[1] != f"{host}_eth"
+                                and identifier[1] != f"{host}_mwan3"
+                                and identifier[1] != f"{host}_ap"
                             ):
                                 # This is a STA device (not the main router, QModem, AP device, network interface or MWAN device)
                                 _LOGGER.info(
@@ -417,36 +423,26 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
                                 break
             _LOGGER.debug("Removed %d STA devices", removed_count)
 
-        # If AP sensors are disabled, remove all AP devices
-        if not ap_enabled:
+        sensors = [
+            ("AP", ap_enabled, f"{host}_ap"),
+            ("ETH", eth_enabled, f"{host}_eth"),
+            ("MWAN3", mwan3_enabled, f"{host}_mwan3"),
+        ]
+        for name, enabled, main_id in sensors:
+            if enabled:
+                continue
+            main_device = device_registry.async_get_device(identifiers={(DOMAIN, f"{host}_eth")})
+            if not main_device:
+                continue
             removed_count = 0
-            # Find all AP devices (devices with identifiers starting with host_ap_)
             for device in list(device_registry.devices.values()):  # Use list() to avoid modification during iteration
-                for identifier in device.identifiers:
-                    if identifier[0] == DOMAIN and identifier[1].startswith(f"{host}_ap_"):
-                        # This is an AP device
-                        _LOGGER.info("Removing AP device %s (AP sensors disabled)", identifier[1])
-                        device_registry.async_remove_device(device.id)
-                        removed_count += 1
-                        break
-            _LOGGER.debug("Removed %d AP devices", removed_count)
+                if device.via_device_id == main_device.id:
+                    device_registry.async_remove_device(device.id)
+                    removed_count += 1
 
-        # If MWAN3 sensors are disabled, remove all MWAN3 devices
-        if not mwan3_enabled:
-            removed_count = 0
-            # Find all MWAN3 devices (devices with identifiers starting with host_mwan3_)
-            for device in list(device_registry.devices.values()):  # Use list() to avoid modification during iteration
-                for identifier in device.identifiers:
-                    if identifier[0] == DOMAIN and identifier[1].startswith(f"{host}_mwan3_"):
-                        # This is an MWAN3 device
-                        _LOGGER.info(
-                            "Removing MWAN3 device %s (MWAN3 sensors disabled)",
-                            identifier[1],
-                        )
-                        device_registry.async_remove_device(device.id)
-                        removed_count += 1
-                        break
-            _LOGGER.debug("Removed %d MWAN3 devices", removed_count)
+            _LOGGER.info("Removing %s devices", name)
+            device_registry.async_remove_device(main_device.id)
+            _LOGGER.debug("Removed %d %s devices", removed_count, name)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
