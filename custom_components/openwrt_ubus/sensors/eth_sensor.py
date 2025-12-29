@@ -18,6 +18,7 @@ from homeassistant.const import (
     UnitOfInformation,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
@@ -145,6 +146,16 @@ async def async_setup_entry(
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
 
+    host = coordinator.data_manager.entry.data[CONF_HOST]
+    device_registry = dr.async_get(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{host}_eth")},
+        name=f"{host} Network Interfaces",
+        manufacturer="OpenWrt",
+        via_device=(DOMAIN, host),  # Link to main router device
+    )
+
     entities = []
 
     # Get the network devices from coordinator data
@@ -216,7 +227,7 @@ class NetworkInterfaceSensor(CoordinatorEntity, SensorEntity):
             name=f"{device_name}",
             manufacturer="OpenWrt",
             model=self._get_device_type(),
-            via_device=(DOMAIN, self._host),  # Link to main router device
+            via_device=(DOMAIN, f"{self._host}_eth"),  # Link to main router device
         )
 
     def _get_device_type(self) -> str:

@@ -362,6 +362,16 @@ async def async_setup_entry(
     # Perform first refresh
     await coordinator.async_config_entry_first_refresh()
 
+    host = coordinator.data_manager.entry.data[CONF_HOST]
+    device_registry = dr.async_get(hass)
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{host}_ap")},
+        name=f"{host} Access Points",
+        manufacturer="OpenWrt",
+        via_device=(DOMAIN, host),  # Link to main router device
+    )
+
     # Add initial sensors for any devices already discovered
     initial_entities = []
     if coordinator.data and coordinator.data.get("ap_info"):
@@ -431,7 +441,7 @@ class ApSensor(CoordinatorEntity, SensorEntity):
             name=device_name,
             manufacturer="OpenWrt",
             model="Access Point",
-            via_device=(DOMAIN, self._host),
+            via_device=(DOMAIN, f"{self._host}_ap"),
         )
 
     @property
