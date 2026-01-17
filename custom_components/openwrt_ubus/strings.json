@@ -25,7 +25,8 @@
           "enable_ap_sensors": "Enable Access Point Sensors",
           "enable_eth_sensors": "Enable Network Interface Sensors",
           "enable_service_controls": "Enable Service Controls",
-          "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)"
+          "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)",
+          "enable_wired_tracking": "Enable Wired Device Tracking"
         }
       },
       "services": {
@@ -70,9 +71,16 @@
           "enable_system_sensors": "Enable System Sensors",
           "enable_qmodem_sensors": "Enable QModem Sensors",
           "enable_sta_sensors": "Enable Station (WiFi Device) Sensors",
+          "enable_ap_sensors": "Enable Access Point Sensors",
+          "enable_eth_sensors": "Enable Network Interface Sensors",
+          "enable_service_controls": "Enable Service Controls",
+          "enable_device_kick_buttons": "Enable Device Kick Buttons",
+          "enable_wired_tracking": "Enable Wired Device Tracking",
           "system_sensor_timeout": "System Sensor Update Interval (seconds)",
           "qmodem_sensor_timeout": "QModem Sensor Update Interval (seconds)",
-          "sta_sensor_timeout": "Station Sensor Update Interval (seconds)"
+          "sta_sensor_timeout": "Station Sensor Update Interval (seconds)",
+          "ap_sensor_timeout": "AP Sensor Update Interval (seconds)",
+          "refresh_services": "Refresh Services List"
         }
       },
       "sensors": {

@@ -4,19 +4,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Dict, Any, Optional
+from typing import TYPE_CHECKING, Any
 
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
-    CONF_HOST,
-    CONF_USERNAME,
-    CONF_PASSWORD,
+    CONF_CERT_PATH,
     CONF_USE_HTTPS,
     CONF_VERIFY_SSL,
     DEFAULT_USE_HTTPS,
     DEFAULT_VERIFY_SSL,
+    build_ubus_url,
 )
+
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
 from .ubus_client import create_enhanced_ubus_client
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,14 +31,14 @@ class ConnectionDiagnostics:
 
     @staticmethod
     async def test_connection(
-        hass,
+        hass: HomeAssistant,
         host: str,
         username: str,
         password: str,
         use_https: bool = DEFAULT_USE_HTTPS,
         verify_ssl: bool = DEFAULT_VERIFY_SSL,
-        cert_path: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        cert_path: str | None = None,
+    ) -> dict[str, Any]:
         """Test connection to OpenWrt device and return diagnostic information.
 
         Args:
@@ -49,7 +53,7 @@ class ConnectionDiagnostics:
         Returns:
             Dictionary containing diagnostic information
         """
-        results = {
+        results: dict[str, Any] = {
             "success": False,
             "error": None,
             "error_type": None,
@@ -57,10 +61,12 @@ class ConnectionDiagnostics:
             "recommendations": []
         }
 
+        protocol = "https" if use_https else "http"
+        client = None
+
         try:
-            # Build URL
-            protocol = "https" if use_https else "http"
-            url = f"{protocol}://{host}/ubus"
+            # Build URL using utility function
+            url = build_ubus_url(host, use_https)
 
             _LOGGER.info("Starting diagnostic connection test to %s://%s", protocol, host)
 
@@ -81,9 +87,8 @@ class ConnectionDiagnostics:
 
             if session_id:
                 results["success"] = True
-                results["details"]["session_id"] = session_id
                 results["details"]["connection_established"] = True
-                _LOGGER.info("Diagnostic test successful: session_id = %s", session_id)
+                _LOGGER.info("Diagnostic test successful")
 
                 # Test basic ubus functionality
                 try:
@@ -100,8 +105,6 @@ class ConnectionDiagnostics:
                 results["recommendations"].append("Check username and password")
                 results["recommendations"].append("Verify user has ubus access permissions")
                 results["recommendations"].append("Check if OpenWrt ubus service is running")
-
-            await client.close()
 
         except ConnectionRefusedError as exc:
             results["error"] = f"Connection refused: {exc}"
@@ -135,10 +138,17 @@ class ConnectionDiagnostics:
             results["recommendations"].append("Try restarting both Home Assistant and OpenWrt device")
             _LOGGER.error("Diagnostic test failed: Unexpected error: %s", exc)
 
-        # Add connection details
+        finally:
+            # Ensure client is always closed to prevent unclosed session warnings
+            if client is not None:
+                try:
+                    await client.close()
+                except Exception as exc:
+                    _LOGGER.debug("Error closing diagnostic client: %s", exc)
+
+        # Add connection details (excluding sensitive info)
         results["details"]["protocol"] = protocol
         results["details"]["host"] = host
-        results["details"]["username"] = username
         results["details"]["use_https"] = use_https
         results["details"]["verify_ssl"] = verify_ssl
         results["details"]["cert_path"] = cert_path if cert_path else None
@@ -146,7 +156,7 @@ class ConnectionDiagnostics:
         return results
 
     @staticmethod
-    def generate_recommendations(diagnostic_results: Dict[str, Any]) -> str:
+    def generate_recommendations(diagnostic_results: dict[str, Any]) -> str:
         """Generate human-readable recommendations based on diagnostic results.
 
         Args:
@@ -189,7 +199,7 @@ class ConnectionDiagnostics:
         return output
 
     @staticmethod
-    async def quick_test(hass, config_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def quick_test(hass: HomeAssistant, config_data: dict[str, Any]) -> dict[str, Any]:
         """Quick connection test using config data.
 
         Args:

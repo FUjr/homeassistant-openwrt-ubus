@@ -28,6 +28,7 @@ from .const import (
     CONF_ENABLE_ETH_SENSORS,
     CONF_ENABLE_SERVICE_CONTROLS,
     CONF_ENABLE_DEVICE_KICK_BUTTONS,
+    CONF_ENABLE_WIRED_TRACKING,
     CONF_SELECTED_SERVICES,
     CONF_SYSTEM_SENSOR_TIMEOUT,
     CONF_QMODEM_SENSOR_TIMEOUT,
@@ -45,7 +46,7 @@ from .const import (
     DEFAULT_ENABLE_ETH_SENSORS,
     DEFAULT_ENABLE_SERVICE_CONTROLS,
     DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
-    DEFAULT_SELECTED_SERVICES,
+    DEFAULT_ENABLE_WIRED_TRACKING,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
     DEFAULT_STA_SENSOR_TIMEOUT,
@@ -56,8 +57,8 @@ from .const import (
     WIRELESS_SOFTWARES,
     API_SUBSYS_RC,
     API_METHOD_LIST,
+    build_ubus_url,
 )
-from .Ubus import Ubus
 from .Ubus.const import API_RPC_CALL
 from .ubus_client import create_enhanced_ubus_client
 from .security_utils import safe_log_data
@@ -92,6 +93,7 @@ STEP_SENSORS_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_ENABLE_ETH_SENSORS, default=DEFAULT_ENABLE_ETH_SENSORS): bool,
         vol.Optional(CONF_ENABLE_SERVICE_CONTROLS, default=DEFAULT_ENABLE_SERVICE_CONTROLS): bool,
         vol.Optional(CONF_ENABLE_DEVICE_KICK_BUTTONS, default=DEFAULT_ENABLE_DEVICE_KICK_BUTTONS): bool,
+        vol.Optional(CONF_ENABLE_WIRED_TRACKING, default=DEFAULT_ENABLE_WIRED_TRACKING): bool,
     }
 )
 
@@ -125,35 +127,30 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     # Get Home Assistant's HTTP client session
     session = async_get_clientsession(hass)
 
-    # Build URL with proper protocol and explicit port to avoid HTTPS redirection
-    protocol = "https" if data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS) else "http"
-    port = "443" if protocol == "https" else "80"
-    url = f"{protocol}://{data[CONF_HOST]}:{port}/ubus"
+    # Build URL using utility function
+    use_https = data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)
+    url = build_ubus_url(data[CONF_HOST], use_https)
 
     # Configure SSL verification
     verify_ssl = data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
     cert_path = data.get(CONF_CERT_PATH)
 
-    # Debug configuration values - inline implementation
-    use_https_raw = data.get(CONF_USE_HTTPS)
-    _LOGGER.info("Configuration Debug [validate_input]:")
-    _LOGGER.info("  Raw CONF_USE_HTTPS value: %s", use_https_raw)
-    _LOGGER.info("  DEFAULT_USE_HTTPS: %s", DEFAULT_USE_HTTPS)
-    _LOGGER.info("  Computed use_https: %s", use_https_raw)
-    _LOGGER.info("  Computed protocol: %s", protocol)
-
-    # Debug logging for URL construction
-    _LOGGER.debug("Connection details: CONF_USE_HTTPS=%s (default: %s), computed protocol=%s, port=%s, URL=%s",
-                 use_https_raw, DEFAULT_USE_HTTPS, protocol, port, url)
-    _LOGGER.debug("SSL settings: verify_ssl=%s (default: %s), cert_path=%s",
-                 verify_ssl, DEFAULT_VERIFY_SSL, cert_path)
-    _LOGGER.info("Attempting connection to OpenWrt device at %s with protocol %s", data[CONF_HOST], protocol)
+    # Debug configuration values
+    _LOGGER.debug("Configuration Debug [validate_input]:")
+    _LOGGER.debug("  use_https: %s, URL: %s", use_https, url)
+    _LOGGER.debug("SSL settings: verify_ssl=%s, cert_path=%s", verify_ssl, cert_path)
 
     # If using HTTPS with unverified SSL, warn user
-    if protocol == "https" and not verify_ssl:
-        _LOGGER.warning("HTTPS enabled with SSL verification disabled - this is insecure but necessary for unsigned certificates")
+    if use_https and not verify_ssl:
+        _LOGGER.warning(
+            "HTTPS enabled with SSL verification disabled - "
+            "this is insecure but necessary for self-signed certificates"
+        )
 
-    safe_log_data(data, "debug", "Attempting connection with these parameters (credentials redacted)")
+    safe_log_data(
+        data, "debug",
+        "Attempting connection with these parameters (credentials redacted)"
+    )
 
     ubus = create_enhanced_ubus_client(
         url,
@@ -166,15 +163,13 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     try:
         # Test connection
-        _LOGGER.info("Attempting to connect to %s://%s with user %s", protocol, data[CONF_HOST], data[CONF_USERNAME])
-        _LOGGER.info("Full connection URL: %s", url)
-        _LOGGER.info("SSL settings: verify_ssl=%s, cert_path=%s", verify_ssl, cert_path)
+        _LOGGER.debug("Attempting to connect to %s", url)
 
         session_id = await ubus.connect()
 
         if session_id is None:
             _LOGGER.error("=== CONNECTION FAILURE DETAILS ===")
-            _LOGGER.error("Device: %s://%s", protocol, data[CONF_HOST])
+            _LOGGER.error("URL: %s", url)
             _LOGGER.error("Username: %s", data[CONF_USERNAME])
             _LOGGER.error("SSL Verification: %s", verify_ssl)
             _LOGGER.error("Certificate Path: %s", cert_path)
@@ -189,12 +184,13 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             _LOGGER.error("=== END FAILURE DETAILS ===")
             raise CannotConnect("Failed to connect to OpenWrt device - session_id is None")
 
-        _LOGGER.info("Successfully connected to OpenWrt device at %s://%s", protocol, data[CONF_HOST])
-        _LOGGER.debug("Received session_id: %s", session_id)
+        _LOGGER.info("Successfully connected to OpenWrt device at %s", url)
+        # Note: session_id is sensitive, only log at debug level and redacted
+        _LOGGER.debug("Session established successfully")
 
     except ConnectionRefusedError as exc:
         _LOGGER.error("Connection refused: OpenWrt device at %s is not accepting connections", data[CONF_HOST])
-        raise CannotConnect(f"Connection refused - check if OpenWrt device is running and accessible") from exc
+        raise CannotConnect("Connection refused - check if OpenWrt device is running and accessible") from exc
     except asyncio.TimeoutError as exc:
         _LOGGER.error("Connection timeout: OpenWrt device at %s did not respond in time", data[CONF_HOST])
         raise CannotConnect("Connection timeout - check network connectivity") from exc
@@ -203,9 +199,8 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         raise CannotConnect("Authentication failed - check username and password") from exc
     except Exception as exc:
         _LOGGER.exception("Unexpected exception during connection test: %s", str(exc))
-        _LOGGER.error("Connection details - Protocol: %s, Host: %s, Username: %s, Verify SSL: %s, Cert Path: %s",
-                     protocol, data[CONF_HOST], data[CONF_USERNAME], verify_ssl, cert_path)
-        _LOGGER.error("Exception type: %s, Exception message: %s", type(exc).__name__, str(exc))
+        _LOGGER.error("Connection details - URL: %s, Verify SSL: %s, Cert Path: %s",
+                      url, verify_ssl, cert_path)
         raise CannotConnect(f"Failed to connect to OpenWrt device: {str(exc)}") from exc
     finally:
         # Always close the session to prevent leaks
@@ -219,22 +214,15 @@ async def get_services_list(hass: HomeAssistant, data: dict[str, Any]) -> list[s
     """Get list of available services from OpenWrt."""
     session = async_get_clientsession(hass)
 
-    # Build URL with proper protocol and explicit port to avoid HTTPS redirection
-    protocol = "https" if data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS) else "http"
-    port = "443" if protocol == "https" else "80"
-    url = f"{protocol}://{data[CONF_HOST]}:{port}/ubus"
+    # Build URL using utility function
+    use_https = data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)
+    url = build_ubus_url(data[CONF_HOST], use_https)
 
     # Configure SSL verification
     verify_ssl = data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
     cert_path = data.get(CONF_CERT_PATH)
 
-    # Debug logging for services list
-    _LOGGER.debug("Services list - Connection details: CONF_USE_HTTPS=%s (default: %s), computed protocol=%s, port=%s, URL=%s",
-                 data.get(CONF_USE_HTTPS), DEFAULT_USE_HTTPS, protocol, port, url)
-
-    # If using HTTPS with unverified SSL, warn user
-    if protocol == "https" and not verify_ssl:
-        _LOGGER.warning("HTTPS enabled with SSL verification disabled - this is insecure but necessary for unsigned certificates")
+    _LOGGER.debug("Getting services list from %s", url)
 
     ubus = create_enhanced_ubus_client(
         url,
@@ -244,25 +232,24 @@ async def get_services_list(hass: HomeAssistant, data: dict[str, Any]) -> list[s
         verify_ssl=verify_ssl,
         cert_file=cert_path
     )
-    
+
     try:
         session_id = await ubus.connect()
         if session_id is None:
             return []
-        
+
         # Call rc list to get services
         response = await ubus.api_call(API_RPC_CALL, API_SUBSYS_RC, API_METHOD_LIST, {})
         if response and isinstance(response, dict):
             services = list(response.keys())
             return sorted(services)
-        
+        return []
+
     except Exception as exc:
         _LOGGER.warning("Failed to get services list: %s", exc)
         return []
     finally:
         await ubus.close()
-    
-    return []
 
 
 class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -290,7 +277,7 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                info = await validate_input(self.hass, user_input)
+                await validate_input(self.hass, user_input)
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -317,11 +304,11 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the sensor configuration step."""
         if user_input is not None:
             self._sensor_data = user_input
-            
+
             # If service controls are enabled, proceed to services selection
             if user_input.get(CONF_ENABLE_SERVICE_CONTROLS, False):
                 return await self.async_step_services()
-            
+
             return await self.async_step_timeouts()
 
         return self.async_show_form(
@@ -337,11 +324,11 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle the services selection step."""
         errors: dict[str, str] = {}
-        
+
         if user_input is not None:
             self._services_data = user_input
             return await self.async_step_timeouts()
-        
+
         # Get available services
         if not self._available_services:
             try:
@@ -349,10 +336,10 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
             except Exception as exc:
                 _LOGGER.warning("Failed to get services list: %s", exc)
                 errors["base"] = "cannot_get_services"
-        
+
         if not self._available_services and not errors:
             errors["base"] = "no_services_found"
-        
+
         # Create multi-select schema for services
         services_schema = vol.Schema({})
         if self._available_services:
@@ -361,7 +348,7 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
                     {service: service for service in self._available_services}
                 ),
             })
-        
+
         return self.async_show_form(
             step_id="services",
             data_schema=services_schema,
@@ -384,7 +371,7 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
                 **self._services_data,
                 **user_input,
             }
-            
+
             info = {"title": f"OpenWrt ubus {config_data[CONF_HOST]}"}
             return self.async_create_entry(title=info["title"], data=config_data)
 
@@ -413,19 +400,19 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
             # Check if we need to refresh services
             if user_input.get("refresh_services", False):
                 return await self.async_step_services()
-            
+
             # Get current data and merge with new options
             new_data = dict(self.config_entry.data)
             new_data.update(user_input)
-            
+
             # Update the config entry with new data
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data
             )
-            
+
             # Reload the integration to apply changes
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-            
+
             return self.async_create_entry(title="", data={})
 
         # Create form with all configurable options
@@ -469,6 +456,10 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                     default=current_data.get(CONF_ENABLE_DEVICE_KICK_BUTTONS, DEFAULT_ENABLE_DEVICE_KICK_BUTTONS)
                 ): bool,
                 vol.Optional(
+                    CONF_ENABLE_WIRED_TRACKING,
+                    default=current_data.get(CONF_ENABLE_WIRED_TRACKING, DEFAULT_ENABLE_WIRED_TRACKING)
+                ): bool,
+                vol.Optional(
                     CONF_SYSTEM_SENSOR_TIMEOUT,
                     default=current_data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT)
                 ): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
@@ -501,22 +492,22 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Handle services configuration."""
         errors: dict[str, str] = {}
-        
+
         if user_input is not None:
             # Update config with selected services
             new_data = dict(self.config_entry.data)
             new_data.update(user_input)
-            
+
             # Update the config entry
             self.hass.config_entries.async_update_entry(
                 self.config_entry, data=new_data
             )
-            
+
             # Reload the integration
             await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-            
+
             return self.async_create_entry(title="", data={})
-        
+
         # Get available services
         if not self._available_services:
             try:
@@ -524,10 +515,10 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
             except Exception as exc:
                 _LOGGER.warning("Failed to get services list: %s", exc)
                 errors["base"] = "cannot_get_services"
-        
+
         if not self._available_services and not errors:
             errors["base"] = "no_services_found"
-        
+
         # Create multi-select schema for services
         current_services = self.config_entry.data.get(CONF_SELECTED_SERVICES, [])
         services_schema = vol.Schema({})
@@ -537,7 +528,7 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                     {service: service for service in self._available_services}
                 ),
             })
-        
+
         return self.async_show_form(
             step_id="services",
             data_schema=services_schema,

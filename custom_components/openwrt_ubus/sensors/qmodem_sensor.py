@@ -16,7 +16,6 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_HOST,
-    PERCENTAGE,
     UnitOfElectricPotential,
     UnitOfTemperature,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
@@ -196,22 +195,22 @@ async def async_setup_entry(
     """Set up OpenWrt QModem sensors from a config entry."""
     # Check if modem_ctrl is available from the initial setup
     modem_ctrl_available = hass.data.get(DOMAIN, {}).get("modem_ctrl_available", False)
-    
+
     if not modem_ctrl_available:
         _LOGGER.info("QModem entities not created - modem_ctrl is not available")
         return None
-    
+
     # Get shared data manager
     data_manager_key = f"data_manager_{entry.entry_id}"
     data_manager = hass.data[DOMAIN][data_manager_key]
-    
+
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
         CONF_QMODEM_SENSOR_TIMEOUT,
         entry.data.get(CONF_QMODEM_SENSOR_TIMEOUT, DEFAULT_QMODEM_SENSOR_TIMEOUT)
     )
     scan_interval = timedelta(seconds=timeout)
-    
+
     # Create coordinator using shared data manager
     coordinator = SharedDataUpdateCoordinator(
         hass,
@@ -223,7 +222,7 @@ async def async_setup_entry(
 
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()
-    
+
     # Create QModem sensor entities
     entities = [
         QModemSensor(coordinator, description)
@@ -259,20 +258,20 @@ class QModemSensor(CoordinatorEntity, SensorEntity):
         # Try to get manufacturer from QModem data
         manufacturer = "Unknown"
         model = "QModem Device"
-        
+
         if self.coordinator.data and self.coordinator.data.get("qmodem_info"):
             qmodem_info = self.coordinator.data["qmodem_info"]
             try:
                 manufacturer_value = self._extract_qmodem_value(qmodem_info, "qmodem_manufacturer")
                 if manufacturer_value:
                     manufacturer = manufacturer_value
-                
+
                 revision_value = self._extract_qmodem_value(qmodem_info, "qmodem_revision")
                 if revision_value:
                     model = f"QModem {revision_value}"
-            except Exception:
-                pass  # Use default values if extraction fails
-        
+            except Exception as exc:
+                _LOGGER.debug("Error extracting QModem device info: %s", exc)
+
         # Create a separate device for QModem
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self._host}_qmodem")},
@@ -311,31 +310,31 @@ class QModemSensor(CoordinatorEntity, SensorEntity):
         if not info_list:
             _LOGGER.debug("No info list found in qmodem_info for key %s", key)
             return None
-            
+
         # Process each info item
         for info_item in info_list:
             modem_info_list = info_item.get("modem_info", [])
             if not modem_info_list:
                 continue
-                
+
             # Track context for LTE vs 5G NR signals
             current_context = None
             lte_signals = {}
             nr5g_signals = {}
-                
+
             # Process each modem info item to find our value
             for item in modem_info_list:
                 class_origin = item.get("class_origin", "")
                 item_key = item.get("key", "")
                 value = item.get("value", "")
                 item_type = item.get("type", "")
-                
+
                 # Update context based on special keys
                 if item_key == "LTE":
                     current_context = "LTE"
                 elif item_key.startswith("NR"):  # NR5G-NSA or any NR variant for 5G
                     current_context = "NR5G"
-                
+
                 # Process based on sensor key and class origin
                 if class_origin == "Base Information":
                     result = self._process_base_info_item(item_key, value, key)
@@ -351,7 +350,7 @@ class QModemSensor(CoordinatorEntity, SensorEntity):
                         lte_signals[item_key] = value
                     elif current_context == "NR5G" and item_key in ["RSRP", "RSRQ", "SINR"]:
                         nr5g_signals[item_key] = value
-        
+
         # Check if we found the requested signal value
         if key == "qmodem_lte_rsrp" and "RSRP" in lte_signals:
             numeric_match = re.search(r'(-?\d+)', str(lte_signals["RSRP"]))
@@ -374,7 +373,7 @@ class QModemSensor(CoordinatorEntity, SensorEntity):
         elif key == "qmodem_nr5g_sinr" and "SINR" in nr5g_signals:
             numeric_match = re.search(r'(\d+)', str(nr5g_signals["SINR"]))
             return int(numeric_match.group(1)) if numeric_match else None
-        
+
         _LOGGER.debug("No matching value found for key %s in qmodem data", key)
         return None
 
@@ -388,7 +387,7 @@ class QModemSensor(CoordinatorEntity, SensorEntity):
             "voltage": "qmodem_voltage",
             "connect_status": "qmodem_connect_status",
         }
-        
+
         if item_key in key_mapping and key_mapping[item_key] == target_key:
             if target_key == "qmodem_temperature":
                 # Extract numeric value from temperature string (e.g., "71°C")
@@ -409,10 +408,10 @@ class QModemSensor(CoordinatorEntity, SensorEntity):
             "ISP": "qmodem_isp",
             "SIM Slot": "qmodem_sim_slot",
             "IMEI": "qmodem_imei",
-            "IMSI": "qmodem_imsi", 
+            "IMSI": "qmodem_imsi",
             "ICCID": "qmodem_iccid",
         }
-        
+
         if item_key in key_mapping and key_mapping[item_key] == target_key:
             # Clean up value - remove newlines and extra spaces
             clean_value = str(value).replace('\n', ' ').strip() if value else None
@@ -427,13 +426,13 @@ class QModemSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.last_update_success:
             # Only mark as unavailable if there's a clear connection failure
             return True  # Changed: be more permissive about availability
-        
+
         # Even if no qmodem data, keep entity available to show proper state
         return True
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Return additional state attributes."""        
+        """Return additional state attributes."""
         attributes = {
             "router_host": self._host,
             "last_update": self.coordinator.last_update_success,

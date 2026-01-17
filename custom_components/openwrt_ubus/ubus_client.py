@@ -7,7 +7,6 @@ import logging
 import ssl
 from typing import Optional
 
-import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
 
 from .Ubus.interface import Ubus
@@ -62,7 +61,7 @@ class EnhancedUbusClient(Ubus):
         # Always configure SSL for HTTPS connections
         # Even when verify=False, we need to create an SSL context that disables verification
         _LOGGER.debug("Configuring SSL context - verify=%s, cert_file=%s",
-                     self._ssl_verify, self._ssl_cert_file)
+                      self._ssl_verify, self._ssl_cert_file)
 
         try:
             # Run SSL context creation in thread pool to avoid blocking
@@ -75,7 +74,7 @@ class EnhancedUbusClient(Ubus):
                 await self._replace_session_with_ssl(ssl_context)
                 self._ssl_configured = True
                 _LOGGER.info("SSL context configured asynchronously (verify=%s, has_cert=%s)",
-                           self._ssl_verify, bool(self._ssl_cert_file))
+                             self._ssl_verify, bool(self._ssl_cert_file))
             else:
                 _LOGGER.warning("Failed to create SSL context, continuing with default session")
 
@@ -94,7 +93,10 @@ class EnhancedUbusClient(Ubus):
                 # Disable SSL verification for unsigned certificates
                 ssl_context.check_hostname = False
                 ssl_context.verify_mode = ssl.CERT_NONE
-                _LOGGER.info("SSL verification disabled for unsigned certificates - check_hostname=False, verify_mode=CERT_NONE")
+                _LOGGER.info(
+                    "SSL verification disabled for unsigned certificates - "
+                    "check_hostname=False, verify_mode=CERT_NONE"
+                )
             else:
                 _LOGGER.info("SSL verification enabled - using default certificate verification")
 
@@ -107,7 +109,7 @@ class EnhancedUbusClient(Ubus):
                     return None
 
             _LOGGER.debug("SSL context created successfully - verify=%s, check_hostname=%s, verify_mode=%s",
-                         verify, ssl_context.check_hostname, ssl_context.verify_mode)
+                          verify, ssl_context.check_hostname, ssl_context.verify_mode)
             return ssl_context
         except Exception as exc:
             _LOGGER.error("Error creating SSL context: %s", exc)
@@ -135,7 +137,7 @@ class EnhancedUbusClient(Ubus):
         """Connect to OpenWrt device with SSL configuration."""
         _LOGGER.debug("EnhancedUbusClient.connect() called - ensuring SSL configuration")
         _LOGGER.debug("SSL settings before configuration: verify=%s, cert_file=%s, ssl_configured=%s",
-                     self._ssl_verify, self._ssl_cert_file, self._ssl_configured)
+                      self._ssl_verify, self._ssl_cert_file, self._ssl_configured)
 
         # Ensure SSL is configured before connecting
         await self._ensure_ssl_configured()

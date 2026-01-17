@@ -6,7 +6,7 @@ import asyncio
 from datetime import datetime, timedelta
 from functools import wraps
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
@@ -14,23 +14,30 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .ubus_client import create_enhanced_extended_ubus_client
 from .extended_ubus import ExtendedUbus
 from .const import (
-    CONF_DHCP_SOFTWARE, 
-    CONF_WIRELESS_SOFTWARE, 
+    CONF_DHCP_SOFTWARE,
+    CONF_WIRELESS_SOFTWARE,
+    CONF_USE_HTTPS,
+    CONF_VERIFY_SSL,
+    CONF_CERT_PATH,
     CONF_SYSTEM_SENSOR_TIMEOUT,
     CONF_QMODEM_SENSOR_TIMEOUT,
     CONF_STA_SENSOR_TIMEOUT,
     CONF_AP_SENSOR_TIMEOUT,
     CONF_SERVICE_TIMEOUT,
-    DOMAIN, 
-    DEFAULT_DHCP_SOFTWARE, 
-    DEFAULT_WIRELESS_SOFTWARE,
+    CONF_ENABLE_WIRED_TRACKING,
+    DEFAULT_USE_HTTPS,
+    DEFAULT_VERIFY_SSL,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
     DEFAULT_STA_SENSOR_TIMEOUT,
     DEFAULT_AP_SENSOR_TIMEOUT,
     DEFAULT_SERVICE_TIMEOUT,
+    DEFAULT_ENABLE_WIRED_TRACKING,
+    build_ubus_url,
+    get_config_value,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,7 +45,7 @@ _LOGGER = logging.getLogger(__name__)
 
 def ubus_auto_reconnect(max_retries: int = 1):
     """Decorator to handle permission denied errors and auto-reconnect ubus client.
-    
+
     Args:
         max_retries: Maximum number of reconnection attempts (default: 1)
     """
@@ -52,10 +59,10 @@ def ubus_auto_reconnect(max_retries: int = 1):
                 except PermissionError as exc:
                     if "Access denied" in str(exc) and retries < max_retries:
                         _LOGGER.warning(
-                            "Permission denied in %s, attempting to reconnect (attempt %d/%d)", 
+                            "Permission denied in %s, attempting to reconnect (attempt %d/%d)",
                             func.__name__, retries + 1, max_retries + 1
                         )
-                        
+
                         # Clear all ubus clients to force reconnection
                         for client_type, client in self._ubus_clients.items():
                             try:
@@ -63,23 +70,23 @@ def ubus_auto_reconnect(max_retries: int = 1):
                                 _LOGGER.debug("Closed ubus client: %s", client_type)
                             except Exception as close_exc:
                                 _LOGGER.debug("Error closing ubus client %s: %s", client_type, close_exc)
-                        
+
                         self._ubus_clients.clear()
                         _LOGGER.info("Cleared all ubus clients, will reconnect on next call")
-                        
+
                         retries += 1
                         if retries <= max_retries:
                             # Small delay before retry
                             await asyncio.sleep(0.5)
                             continue
-                    
+
                     # If we've exhausted retries or it's not an access denied error, re-raise
                     _LOGGER.error("Permission denied in %s after %d retries", func.__name__, retries)
                     raise
-                except Exception as exc:
+                except Exception:
                     # For non-permission errors, don't retry
                     raise
-            
+
             # This should never be reached, but just in case
             raise RuntimeError(f"Unexpected state in {func.__name__} after {retries} retries")
         return wrapper
@@ -95,7 +102,7 @@ class SharedUbusDataManager:
         self.entry = entry
         self._data_cache: Dict[str, Dict[str, Any]] = {}
         self._last_update: Dict[str, datetime] = {}
-        
+
         # Get timeout values from configuration (priority: options > data > default)
         system_timeout = entry.options.get(
             CONF_SYSTEM_SENSOR_TIMEOUT,
@@ -117,13 +124,14 @@ class SharedUbusDataManager:
             CONF_SERVICE_TIMEOUT,
             entry.data.get(CONF_SERVICE_TIMEOUT, DEFAULT_SERVICE_TIMEOUT)
         )
-        
+
         self._update_intervals: Dict[str, timedelta] = {
             "system_info": timedelta(seconds=system_timeout),
             "system_stat": timedelta.min,  # /proc/stat changes very frequently
             "system_board": timedelta(seconds=system_timeout * 2),  # Board info changes less frequently
             "qmodem_info": timedelta(seconds=qmodem_timeout),
             "device_statistics": timedelta(seconds=sta_timeout),
+            "wired_devices": timedelta(seconds=sta_timeout),  # Wired device tracking
             "dhcp_leases": timedelta(seconds=sta_timeout),
             "hostapd_clients": timedelta(seconds=sta_timeout),
             "iwinfo_stations": timedelta(seconds=sta_timeout),
@@ -138,34 +146,48 @@ class SharedUbusDataManager:
         self._update_locks: Dict[str, asyncio.Lock] = {
             key: asyncio.Lock() for key in self._update_intervals
         }
-        
+
         # Initialize ubus clients
         self._ubus_clients: Dict[str, ExtendedUbus] = {}
         self._session = None
-        
-    async def _get_ubus_client(self, client_type: str = "default") -> ExtendedUbus:
+
+    async def _get_ubus_client(self, client_type: str = "default"):
         """Get or create ubus client instance."""
         if client_type not in self._ubus_clients:
             if self._session is None:
                 self._session = async_get_clientsession(self.hass)
-            
-            url = f"http://{self.entry.data[CONF_HOST]}/ubus"
+
+            # Build URL using utility function
+            use_https = self.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)
+            url = build_ubus_url(self.entry.data[CONF_HOST], use_https)
+
             username = self.entry.data[CONF_USERNAME]
             password = self.entry.data[CONF_PASSWORD]
-            
-            # Use ExtendedUbus for all client types now
-            client = ExtendedUbus(url, username, password, session=self._session)
-            
+
+            # Get SSL verification settings
+            verify_ssl = self.entry.data.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)
+            cert_path = self.entry.data.get(CONF_CERT_PATH)
+
+            # Use enhanced client factory for proper SSL handling
+            client = create_enhanced_extended_ubus_client(
+                url,
+                username,
+                password,
+                session=self._session,
+                verify_ssl=verify_ssl,
+                cert_file=cert_path
+            )
+
             # Connect to the client
             try:
                 session_id = await client.connect()
                 if session_id is None:
-                    raise UpdateFailed(f"Failed to connect to OpenWrt device")
+                    raise UpdateFailed("Failed to connect to OpenWrt device")
                 self._ubus_clients[client_type] = client
             except Exception as exc:
                 _LOGGER.error("Failed to connect ubus client %s: %s", client_type, exc)
                 raise UpdateFailed(f"Failed to connect ubus client {client_type}: {exc}")
-                
+
         return self._ubus_clients[client_type]
 
     def get_ubus_connection(self) -> ExtendedUbus:
@@ -173,7 +195,7 @@ class SharedUbusDataManager:
         # Return the default client if available, otherwise create one
         if "default" in self._ubus_clients:
             return self._ubus_clients["default"]
-        
+
         # If no client exists, we need to create one synchronously
         # This is for cases where switch/button entities need immediate access
         # Note: This should ideally be called after the data manager has been initialized
@@ -187,7 +209,7 @@ class SharedUbusDataManager:
         """Check if data should be updated based on interval."""
         if data_type not in self._last_update:
             return True
-        
+
         interval = self._update_intervals.get(data_type, timedelta(minutes=1))
         return datetime.now() - self._last_update[data_type] > interval
 
@@ -256,10 +278,10 @@ class SharedUbusDataManager:
             # First get list of AP devices
             ap_devices_result = await client.get_ap_devices()
             ap_devices = client.parse_ap_devices(ap_devices_result)
-            
+
             # Use batch API to get AP info for all devices
             ap_info_data = await client.get_all_ap_info_batch(ap_devices)
-            
+
             _LOGGER.debug("AP info data fetched successfully: %d devices", len(ap_info_data))
             return {"ap_info": ap_info_data}
         except Exception as exc:
@@ -271,23 +293,23 @@ class SharedUbusDataManager:
         """Fetch service status using batch API."""
         try:
             ubus = await self.get_ubus_connection_async()
-            
+
             # Get services with status in batch call to reduce API requests
             services_data = await ubus.list_services(include_status=True)
-            
+
             if not services_data:
                 _LOGGER.warning("Failed to fetch service status data")
                 return {}
-            
+
             _LOGGER.debug("Fetched service status for %d services", len(services_data))
-            
+
             # Log a sample of the service data for debugging
             if services_data:
                 sample_service = next(iter(services_data.items()))
                 _LOGGER.debug("Sample service data: %s = %s", sample_service[0], sample_service[1])
-                
+
             return services_data
-            
+
         except Exception as exc:
             _LOGGER.error("Error fetching service status: %s", exc)
             raise UpdateFailed(f"Error communicating with OpenWrt: {exc}") from exc
@@ -297,11 +319,11 @@ class SharedUbusDataManager:
         """Fetch device statistics from wireless interfaces."""
         wireless_software = self.entry.data.get(CONF_WIRELESS_SOFTWARE, "iwinfo")
         dhcp_software = self.entry.data.get(CONF_DHCP_SOFTWARE, "dnsmasq")
-        
+
         try:
             # Get MAC to name/IP mapping first
             mac2name = await self._get_mac2name_mapping(dhcp_software)
-            
+
             # Get device statistics and connection info
             if wireless_software == "hostapd":
                 return await self._fetch_hostapd_data(mac2name)
@@ -321,30 +343,30 @@ class SharedUbusDataManager:
             # Get AP devices
             ap_devices_result = await client.get_hostapd()
             ap_devices = client.parse_hostapd_ap_devices(ap_devices_result) if ap_devices_result else []
-            
+
             device_statistics = {}
-            
+
             # Use batch call to get STA data for all AP devices at once
             sta_data_batch = await client.get_all_sta_data_batch(ap_devices, is_hostapd=True)
-            
+
             for ap_device in ap_devices:
                 if ap_device not in sta_data_batch:
                     continue
-                    
+
                 sta_devices = sta_data_batch[ap_device].get('devices', [])
                 sta_stats = sta_data_batch[ap_device].get('statistics', {})
-                
+
                 # Ensure sta_stats is a dictionary (safety check)
                 if not isinstance(sta_stats, dict):
-                    _LOGGER.warning("Expected statistics to be dict for %s, got %s: %s", 
-                                  ap_device, type(sta_stats).__name__, sta_stats)
+                    _LOGGER.warning("Expected statistics to be dict for %s, got %s: %s",
+                                    ap_device, type(sta_stats).__name__, sta_stats)
                     sta_stats = {}
-                
+
                 for mac in sta_devices:
                     normalized_mac = mac.upper()
                     hostname = mac2name.get(normalized_mac, {}).get("hostname", normalized_mac.replace(":", ""))
                     ip_address = mac2name.get(normalized_mac, {}).get("ip", "Unknown IP")
-                    
+
                     # Merge connection info with detailed statistics
                     device_info = {
                         "mac": normalized_mac,
@@ -352,19 +374,20 @@ class SharedUbusDataManager:
                         "ap_device": ap_device,
                         "connected": True,
                         "ip_address": ip_address,
+                        "connection_type": "wireless",
                     }
-                    
+
                     # Add statistics if available and valid
                     if isinstance(sta_stats, dict) and normalized_mac in sta_stats:
                         stats_data = sta_stats[normalized_mac]
                         if isinstance(stats_data, dict):
                             device_info.update(stats_data)
                         else:
-                            _LOGGER.warning("Expected stats data to be dict for MAC %s, got %s", 
-                                          normalized_mac, type(stats_data).__name__)
-                    
+                            _LOGGER.warning("Expected stats data to be dict for MAC %s, got %s",
+                                            normalized_mac, type(stats_data).__name__)
+
                     device_statistics[normalized_mac] = device_info
-            
+
             return {"device_statistics": device_statistics}
         except Exception as exc:
             _LOGGER.error("Error fetching hostapd data: %s", exc)
@@ -378,36 +401,36 @@ class SharedUbusDataManager:
             # Get AP devices
             ap_devices_result = await client.get_ap_devices()
             ap_devices = client.parse_ap_devices(ap_devices_result) if ap_devices_result else []
-            
+
             # Skip if no wireless devices found
             if not ap_devices:
                 return {}
-            
+
             device_statistics = {}
-            
+
             # Use batch call to get STA data for all AP devices at once
             sta_data_batch = await client.get_all_sta_data_batch(ap_devices, is_hostapd=False)
-            
+
             for ap_device in ap_devices:
                 if ap_device not in sta_data_batch:
                     continue
-                    
+
                 device_data = sta_data_batch[ap_device]
-                
+
                 sta_devices = device_data.get('devices', [])
                 sta_stats = device_data.get('statistics', {})
-                
+
                 # Ensure sta_stats is a dictionary (safety check)
                 if not isinstance(sta_stats, dict):
-                    _LOGGER.warning("Expected statistics to be dict for %s, got %s: %s", 
-                                  ap_device, type(sta_stats).__name__, sta_stats)
+                    _LOGGER.warning("Expected statistics to be dict for %s, got %s: %s",
+                                    ap_device, type(sta_stats).__name__, sta_stats)
                     sta_stats = {}
-                
+
                 for mac in sta_devices:
                     normalized_mac = mac.upper()
                     hostname = mac2name.get(normalized_mac, {}).get("hostname", normalized_mac.replace(":", ""))
                     ip_address = mac2name.get(normalized_mac, {}).get("ip", "Unknown IP")
-                    
+
                     # Merge connection info with detailed statistics
                     device_info = {
                         "mac": normalized_mac,
@@ -415,19 +438,20 @@ class SharedUbusDataManager:
                         "ap_device": ap_device,
                         "connected": True,
                         "ip_address": ip_address,
+                        "connection_type": "wireless",
                     }
-                    
+
                     # Add statistics if available and valid
                     if isinstance(sta_stats, dict) and normalized_mac in sta_stats:
                         stats_data = sta_stats[normalized_mac]
                         if isinstance(stats_data, dict):
                             device_info.update(stats_data)
                         else:
-                            _LOGGER.warning("Expected stats data to be dict for MAC %s, got %s", 
-                                          normalized_mac, type(stats_data).__name__)
-                    
+                            _LOGGER.warning("Expected stats data to be dict for MAC %s, got %s",
+                                            normalized_mac, type(stats_data).__name__)
+
                     device_statistics[normalized_mac] = device_info
-            
+
             return {"device_statistics": device_statistics}
         except AttributeError as exc:
             # Handle specific case where result format is unexpected
@@ -445,7 +469,7 @@ class SharedUbusDataManager:
         """Generate MAC to name/IP mapping based on DHCP server."""
         mac2name = {}
         client = await self._get_ubus_client()
-        
+
         try:
             if dhcp_software == "dnsmasq":
                 # Get dnsmasq lease file location
@@ -453,7 +477,7 @@ class SharedUbusDataManager:
                 if result and "values" in result:
                     values = result["values"].values()
                     leasefile = next(iter(values), {}).get("leasefile", "/tmp/dhcp.leases")
-                    
+
                     # Read lease file
                     lease_result = await client.file_read(leasefile)
                     if lease_result and "data" in lease_result:
@@ -473,14 +497,14 @@ class SharedUbusDataManager:
                             mac = lease.get("mac", "")
                             # Convert aabbccddeeff to aa:bb:cc:dd:ee:ff
                             if mac and len(mac) == 12:
-                                mac = ":".join(mac[i:i+2] for i in range(0, len(mac), 2))
+                                mac = ":".join(mac[i:i + 2] for i in range(0, len(mac), 2))
                                 mac2name[mac.upper()] = {
                                     "hostname": lease.get("hostname", ""),
                                     "ip": lease.get("ip", "")
                                 }
         except Exception as exc:
             _LOGGER.warning("Failed to get MAC to name mapping: %s", exc)
-        
+
         return mac2name
 
     @ubus_auto_reconnect(max_retries=1)
@@ -493,7 +517,7 @@ class SharedUbusDataManager:
         except Exception as exc:
             _LOGGER.error("Error fetching connection tracking count: %s", exc)
             raise UpdateFailed(f"Error fetching connection tracking count: {exc}")
-            
+
     @ubus_auto_reconnect(max_retries=1)
     async def _fetch_system_temperatures(self) -> Dict[str, Any]:
         """Fetch system temperature sensors."""
@@ -504,7 +528,7 @@ class SharedUbusDataManager:
         except Exception as exc:
             _LOGGER.error("Error fetching system temperatures: %s", exc)
             raise UpdateFailed(f"Error fetching system temperatures: {exc}")
-            
+
     @ubus_auto_reconnect(max_retries=1)
     async def _fetch_dhcp_clients_count(self) -> Dict[str, Any]:
         """Fetch DHCP clients count."""
@@ -522,15 +546,15 @@ class SharedUbusDataManager:
         client = await self._get_ubus_client()
         try:
             result = await client.get_network_devices()
-            
+
             # Debug log the raw response
             _LOGGER.debug("Raw network devices response: %s", result)
-            
+
             # Handle different response formats
             if isinstance(result, dict) and "values" in result:
                 # Some OpenWrt versions return data in "values" field
                 network_devices = result["values"]
-            
+
             # Handle empty response due to permission issues
             if not result:
                 _LOGGER.warning(
@@ -545,24 +569,61 @@ class SharedUbusDataManager:
                 # Unexpected format
                 _LOGGER.error("Unexpected network devices response format: %s", type(result))
                 network_devices = {}
-            
+
             # Validate the response contains expected data
             if not network_devices or not isinstance(network_devices, dict):
                 _LOGGER.error("Invalid network devices data: %s", network_devices)
                 return {"network_devices": {}}
-                
+
             return {"network_devices": network_devices}
-            
+
         except Exception as exc:
             _LOGGER.error("Error fetching network devices: %s", exc, exc_info=True)
             raise UpdateFailed(f"Error fetching network devices: {exc}")
+
+    @ubus_auto_reconnect(max_retries=1)
+    async def _fetch_wired_devices(self) -> Dict[str, Any]:
+        """Fetch wired devices from ARP table, excluding wireless devices.
+
+        This method:
+        1. Gets all wireless device MACs from device_statistics
+        2. Gets ARP table entries combined with host hints
+        3. Filters out wireless MACs to get only wired devices
+        """
+        # Check if wired tracking is enabled
+        enable_wired = get_config_value(
+            self.entry, CONF_ENABLE_WIRED_TRACKING, DEFAULT_ENABLE_WIRED_TRACKING
+        )
+        if not enable_wired:
+            _LOGGER.debug("Wired device tracking is disabled")
+            return {"wired_devices": {}}
+
+        client = await self._get_ubus_client()
+        try:
+            # Get wireless device MACs from cached device_statistics
+            wireless_macs = set()
+            if "device_statistics" in self._data_cache:
+                device_stats = self._data_cache["device_statistics"]
+                if isinstance(device_stats, dict):
+                    wireless_macs = set(device_stats.keys())
+                    _LOGGER.debug("Found %d wireless MACs to exclude", len(wireless_macs))
+
+            # Get wired devices using the extended ubus method
+            wired_devices = await client.get_wired_devices(wireless_macs)
+
+            _LOGGER.debug("Found %d wired devices", len(wired_devices))
+            return {"wired_devices": wired_devices}
+
+        except Exception as exc:
+            _LOGGER.error("Error fetching wired devices: %s", exc)
+            return {"wired_devices": {}}
 
     @ubus_auto_reconnect(max_retries=1)
     async def _fetch_system_data_batch(self, system_types: set) -> Dict[str, Any]:
         """Fetch system data in batch with auto-reconnect protection."""
         combined_data = {}
         system_client = await self._get_ubus_client()
-        
+
         if "system_info" in system_types:
             if await self._should_update("system_info"):
                 async with self._update_locks["system_info"]:
@@ -571,7 +632,7 @@ class SharedUbusDataManager:
                     self._last_update["system_info"] = datetime.now()
             # Use safe get to avoid KeyError if cache not yet populated
             combined_data["system_info"] = self._data_cache.get("system_info", {})
-        
+
         if "system_board" in system_types:
             if await self._should_update("system_board"):
                 async with self._update_locks["system_board"]:
@@ -580,7 +641,7 @@ class SharedUbusDataManager:
                     self._last_update["system_board"] = datetime.now()
             # Use safe get to avoid KeyError if cache not yet populated
             combined_data["system_board"] = self._data_cache.get("system_board", {})
-        
+
         return combined_data
 
     async def get_data(self, data_type: str) -> Dict[str, Any]:
@@ -625,6 +686,8 @@ class SharedUbusDataManager:
                     data = await self._fetch_dhcp_clients_count()
                 elif data_type == "network_devices":
                     data = await self._fetch_network_devices()
+                elif data_type == "wired_devices":
+                    data = await self._fetch_wired_devices()
                 else:
                     # Defensive: This should not happen due to the check above, but log just in case
                     _LOGGER.error(
@@ -639,7 +702,7 @@ class SharedUbusDataManager:
                 else:
                     # For methods that already return wrapped data
                     self._data_cache[data_type] = data
-                
+
                 self._last_update[data_type] = datetime.now()
                 # Return data in the expected format for coordinator
                 return data
@@ -654,7 +717,7 @@ class SharedUbusDataManager:
     async def get_combined_data(self, data_types: list[str]) -> Dict[str, Any]:
         """Get multiple data types in a single call to optimize API usage."""
         combined_data = {}
-        
+
         # Defensive: Filter out unknown data_types and log them
         known_types = set(self._update_locks.keys())
         requested_types = set(data_types)
@@ -670,7 +733,7 @@ class SharedUbusDataManager:
         # Group data types that can be fetched together
         system_types = {"system_info", "system_stat", "system_board"} & set(data_types)
         other_types = set(data_types) - system_types
-        
+
         # Fetch system data together if needed
         if system_types:
             try:
@@ -683,7 +746,7 @@ class SharedUbusDataManager:
                     if data_type in self._data_cache:
                         # Ensure cached data is placed under its data_type key
                         combined_data[data_type] = self._data_cache[data_type]
-        
+
         # Fetch other data types individually
         for data_type in other_types:
             try:
@@ -691,7 +754,7 @@ class SharedUbusDataManager:
                 combined_data.update(data)
             except Exception as exc:
                 _LOGGER.error("Error fetching %s: %s", data_type, exc)
-        
+
         return combined_data
 
     async def close(self):
@@ -727,7 +790,7 @@ class SharedUbusDataManager:
                 _LOGGER.debug("Closed ubus client: %s", client_type)
             except Exception as exc:
                 _LOGGER.debug("Error closing ubus client %s: %s", client_type, exc)
-        
+
         self._ubus_clients.clear()
         _LOGGER.info("All ubus clients cleared, will reconnect on next call")
 

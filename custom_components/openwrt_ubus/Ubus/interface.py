@@ -19,7 +19,6 @@ from .const import (
     API_RESULT,
     API_RPC_CALL,
     API_RPC_ID,
-    API_RPC_LIST,
     API_RPC_VERSION,
     API_SUBSYS_SESSION,
     API_UBUS_RPC_SESSION,
@@ -113,7 +112,7 @@ class Ubus:
     async def batch_call(self, rpcs: list[dict]):
         """Execute multiple API calls in a single batch request."""
         self._ensure_session()
-        
+
         try:
             response = await self.session.post(
                 self.host, data=json.dumps(rpcs), timeout=self.timeout, verify_ssl=self.verify
@@ -146,35 +145,31 @@ class Ubus:
                     if "Access denied" in error_msg:
                         raise PermissionError(error_msg)
             return json_response
-        
+
         # Handle single response format (fallback)
         if API_ERROR in json_response:
             error_message = json_response[API_ERROR].get(API_MESSAGE, "Unknown error")
             error_code = json_response[API_ERROR].get("code", -1)
-            
+
             # Special handling for permission errors
             if error_code == -32002 or "Access denied" in error_message:
                 _LOGGER.warning(
-                    "Permission denied when calling %s.%s: %s (code: %d)",
-                    subsystem,
-                    method,
+                    "Permission denied in batch call: %s (code: %d)",
                     error_message,
                     error_code
                 )
                 raise PermissionError(
-                    f"Permission denied for {subsystem}.{method}: {error_message} (code: {error_code})"
+                    f"Permission denied in batch call: {error_message} (code: {error_code})"
                 )
-                
+
             # General error handling
             _LOGGER.error(
-                "API call failed for %s.%s: %s (code: %d)",
-                subsystem,
-                method,
+                "Batch API call failed: %s (code: %d)",
                 error_message,
                 error_code
             )
             raise ConnectionError(
-                f"API call failed for {subsystem}.{method}: {error_message} (code: {error_code})"
+                f"Batch API call failed: {error_message} (code: {error_code})"
             )
         return [json_response]
 
@@ -240,10 +235,22 @@ class Ubus:
             _LOGGER.error("api_call exception: %s", req_exc)
             # Handle SSL certificate errors specifically
             if "SSL" in str(req_exc) or "certificate" in str(req_exc).lower():
-                _LOGGER.error("SSL Certificate Error: This is usually caused by using HTTPS with a self-signed certificate.")
-                _LOGGER.error("Try using HTTP instead of HTTPS, or disable SSL verification if using self-signed certificates.")
-                _LOGGER.error("Current configuration: host=%s, verify_ssl=%s", self.host, self.verify)
-                _LOGGER.error("This suggests the device is forcing HTTPS redirection even when HTTP is requested.")
+                _LOGGER.error(
+                    "SSL Certificate Error: This is usually caused by "
+                    "using HTTPS with a self-signed certificate."
+                )
+                _LOGGER.error(
+                    "Try using HTTP instead of HTTPS, or disable SSL "
+                    "verification if using self-signed certificates."
+                )
+                _LOGGER.error(
+                    "Current configuration: host=%s, verify_ssl=%s",
+                    self.host, self.verify
+                )
+                _LOGGER.error(
+                    "This suggests the device is forcing HTTPS redirection "
+                    "even when HTTP is requested."
+                )
             return None
 
         if response.status != HTTP_STATUS_OK:
@@ -263,7 +270,7 @@ class Ubus:
         if API_ERROR in json_response:
             error_message = json_response[API_ERROR].get(API_MESSAGE, "Unknown error")
             error_code = json_response[API_ERROR].get("code", -1)
-            
+
             # Special handling for permission errors
             if error_code == -32002 or "Access denied" in error_message:
                 _LOGGER.warning(
@@ -276,7 +283,7 @@ class Ubus:
                 raise PermissionError(
                     f"Permission denied for {subsystem}.{method}: {error_message} (code: {error_code})"
                 )
-                
+
             # General error handling
             _LOGGER.error(
                 "API call failed for %s.%s: %s (code: %d)",
@@ -301,8 +308,8 @@ class Ubus:
                     else:
                         # Error code - log with descriptive message and return None
                         error_msg = self._get_error_message(error_code)
-                        _LOGGER.debug("API call failed with error code %s (%s): %s", 
-                                    error_code, error_msg, result[1] if len(result) > 1 else "No error message")
+                        _LOGGER.debug("API call failed with error code %s (%s): %s",
+                                      error_code, error_msg, result[1] if len(result) > 1 else "No error message")
                         return None
                 elif isinstance(result, list) and len(result) == 1:
                     # Single element result - might be an error code
@@ -362,13 +369,16 @@ class Ubus:
         if login and API_UBUS_RPC_SESSION in login:
             self.session_id = login[API_UBUS_RPC_SESSION]
             _LOGGER.debug("Authentication successful, received session_id: %s",
-                         "VALID_SESSION" if self.session_id else "INVALID_SESSION")
+                          "VALID_SESSION" if self.session_id else "INVALID_SESSION")
         else:
             self.session_id = None
             _LOGGER.error("Authentication failed - login response: %s",
-                         "Empty response" if not login else f"Missing {API_UBUS_RPC_SESSION} key")
+                          "Empty response" if not login else f"Missing {API_UBUS_RPC_SESSION} key")
             if login:
-                _LOGGER.error("Login response keys: %s", list(login.keys()) if isinstance(login, dict) else "Not a dict")
+                _LOGGER.error(
+                    "Login response keys: %s", list(
+                        login.keys()) if isinstance(
+                        login, dict) else "Not a dict")
 
         return self.session_id
 

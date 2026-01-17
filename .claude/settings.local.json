@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -m py_compile:*)"
+      "Bash(python -m py_compile:*)",
+      "mcp__acp__Bash"
     ],
     "deny": [],
     "ask": []

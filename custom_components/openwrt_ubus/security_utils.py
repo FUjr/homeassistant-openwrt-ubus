@@ -93,7 +93,7 @@ def safe_log_data(data: Any, level: str = "debug", extra_context: str = "") -> N
     """
     sanitized_data = redact_sensitive_data(data)
 
-    message = f"Data log"
+    message = "Data log"
     if extra_context:
         message = f"{message} ({extra_context})"
 

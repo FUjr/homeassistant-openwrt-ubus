@@ -18,6 +18,7 @@ from .const import (
     API_SUBSYS_UCI,
     API_SUBSYS_QMODEM,
     API_SUBSYS_RC,
+    API_SUBSYS_LUCI_RPC,
     API_METHOD_BOARD,
     API_METHOD_GET,
     API_METHOD_GET_AP,
@@ -30,6 +31,9 @@ from .const import (
     API_METHOD_DEL_CLIENT,
     API_METHOD_LIST,
     API_METHOD_INIT,
+    API_METHOD_GET_HOST_HINTS,
+    DEFAULT_BAN_TIME_MS,
+    DEFAULT_DEAUTH_REASON,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -46,27 +50,6 @@ class ExtendedUbus(Ubus):
             API_METHOD_READ,
             {API_PARAM_PATH: path},
         )
-
-    # --- ETH SENSOR DEBUG/ERROR LOGGING PATCH ---
-
-    async def get_eth_sensor_coordinator(self, eth_sensor_id):
-        """
-        Try to get the coordinator for a given eth_sensor.
-        This is a stub for demonstration and error logging.
-        """
-        try:
-            # Simulate loading the eth_sensor module
-            _LOGGER.debug("Loading sensor module: eth_sensor")
-            # Simulate error accessing coordinator
-            raise KeyError(eth_sensor_id)
-        except KeyError as exc:
-            _LOGGER.error(
-                "Error accessing coordinator for eth_sensor: '%s'", eth_sensor_id
-            )
-            _LOGGER.debug("Sensor module eth_sensor returned no coordinator")
-            return None
-
-    # --- END ETH SENSOR PATCH ---
 
     async def get_conntrack_count(self):
         """Read connection tracking count from /proc/sys/net/netfilter/nf_conntrack_count."""
@@ -559,7 +542,7 @@ class ExtendedUbus(Ubus):
             start_priority = status_data.get("start", 0)
 
             _LOGGER.debug("Service %s: running=%s, enabled=%s, start=%s",
-                         service_name, running, enabled, start_priority)
+                          service_name, running, enabled, start_priority)
 
             result = {
                 "running": bool(running),
@@ -577,7 +560,8 @@ class ExtendedUbus(Ubus):
             return {"running": running, "enabled": running, "status": status_data}
 
         # Fallback for unexpected formats
-        _LOGGER.warning("Service %s: Unexpected status format (type %s): %s", service_name, type(status_data), status_data)
+        _LOGGER.warning("Service %s: Unexpected status format (type %s): %s",
+                        service_name, type(status_data), status_data)
         return {"running": False, "enabled": False, "raw_status": status_data}
 
     async def service_action(self, service_name, action):
@@ -609,14 +593,20 @@ class ExtendedUbus(Ubus):
             _LOGGER.warning("Failed to check hostapd availability: %s", exc)
             return False
 
-    async def kick_device(self, hostapd_interface, mac_address, ban_time=60000, reason=5):
+    async def kick_device(
+        self,
+        hostapd_interface: str,
+        mac_address: str,
+        ban_time: int = DEFAULT_BAN_TIME_MS,
+        reason: int = DEFAULT_DEAUTH_REASON,
+    ):
         """Kick a device from the AP interface.
 
         Args:
             hostapd_interface: The hostapd interface name (e.g. "hostapd.phy0-ap0")
             mac_address: MAC address of the device to kick
             ban_time: Ban time in milliseconds (default: 60000ms = 60s)
-            reason: Deauth reason code (default: 5)
+            reason: 802.11 deauthentication reason code (default: 5)
         """
         return await self.api_call(
             API_RPC_CALL,
@@ -633,3 +623,163 @@ class ExtendedUbus(Ubus):
     async def get_network_devices(self):
         """Get network device status."""
         return await self.api_call(API_RPC_CALL, "network.device", "status")
+
+    # luci-rpc specific methods for wired device tracking
+    async def get_host_hints(self):
+        """Get host hints from luci-rpc for device name/IP mapping.
+
+        Returns a dictionary with MAC addresses as keys containing:
+        - ipaddrs: List of IPv4 addresses
+        - ip6addrs: List of IPv6 addresses
+        - name: Hostname if available
+        """
+        try:
+            result = await self.api_call(
+                API_RPC_CALL,
+                API_SUBSYS_LUCI_RPC,
+                API_METHOD_GET_HOST_HINTS
+            )
+            if result and isinstance(result, dict):
+                return result
+            return {}
+        except Exception as exc:
+            _LOGGER.debug("Error getting host hints: %s", exc)
+            return {}
+
+    async def get_arp_table(self):
+        """Read and parse ARP table from /proc/net/arp.
+
+        Returns a list of dictionaries containing:
+        - ip: IP address
+        - mac: MAC address (uppercase)
+        - device: Network interface
+        - state: ARP entry state (derived from flags)
+        """
+        try:
+            result = await self.file_read("/proc/net/arp")
+            if not result or "data" not in result:
+                return []
+
+            return self.parse_arp_table(result["data"])
+        except Exception as exc:
+            _LOGGER.debug("Error reading ARP table: %s", exc)
+            return []
+
+    def parse_arp_table(self, arp_data: str) -> list[dict]:
+        """Parse ARP table data from /proc/net/arp.
+
+        Format of /proc/net/arp:
+        IP address       HW type     Flags       HW address            Mask     Device
+        192.168.1.1      0x1         0x2         00:11:22:33:44:55     *        br-lan
+
+        Flags:
+        - 0x0: incomplete
+        - 0x2: reachable/complete
+        - 0x4: permanent
+        - 0x6: reachable + permanent
+        """
+        arp_entries = []
+        if not arp_data:
+            return arp_entries
+
+        lines = arp_data.strip().split("\n")
+        # Skip header line
+        for line in lines[1:]:
+            parts = line.split()
+            if len(parts) >= 6:
+                ip_addr = parts[0]
+                flags = parts[2]
+                mac_addr = parts[3].upper()
+                device = parts[5]
+
+                # Skip incomplete entries (flags 0x0) and broadcast/multicast
+                if flags == "0x0" or mac_addr == "00:00:00:00:00:00":
+                    continue
+
+                # Determine state based on flags
+                try:
+                    flag_int = int(flags, 16)
+                    if flag_int & 0x4:
+                        state = "permanent"
+                    elif flag_int & 0x2:
+                        state = "reachable"
+                    else:
+                        state = "stale"
+                except ValueError:
+                    state = "unknown"
+
+                arp_entries.append({
+                    "ip": ip_addr,
+                    "mac": mac_addr,
+                    "device": device,
+                    "state": state,
+                    "flags": flags
+                })
+
+        return arp_entries
+
+    async def get_wired_devices(self, wireless_macs: set[str] | None = None) -> dict[str, dict]:
+        """Get wired devices by combining ARP table with host hints.
+
+        Args:
+            wireless_macs: Set of MAC addresses that are wireless (to exclude)
+
+        Returns:
+            Dictionary with MAC addresses as keys containing device info:
+            - ip_address: IPv4 address
+            - hostname: Device hostname if available
+            - connected: Whether device is currently connected
+            - connection_type: "wired"
+            - ap_device: "LAN" for wired devices
+        """
+        if wireless_macs is None:
+            wireless_macs = set()
+
+        # Normalize wireless MACs to uppercase for comparison
+        wireless_macs_upper = {mac.upper() for mac in wireless_macs}
+
+        # Get ARP table entries
+        arp_entries = await self.get_arp_table()
+
+        # Get host hints for name/IP mapping
+        host_hints = await self.get_host_hints()
+
+        wired_devices = {}
+
+        for entry in arp_entries:
+            mac = entry["mac"]
+
+            # Skip wireless devices
+            if mac in wireless_macs_upper:
+                _LOGGER.debug("Skipping wireless device %s from wired tracking", mac)
+                continue
+
+            # Get additional info from host hints
+            hint = host_hints.get(mac, {})
+
+            # Determine hostname - prefer host hints name, fallback to MAC
+            hostname = hint.get("name", "")
+            if not hostname:
+                # Try lowercase MAC lookup as well
+                hint = host_hints.get(mac.lower(), {})
+                hostname = hint.get("name", "")
+
+            # Determine connection state
+            connected = entry["state"] in ("reachable", "permanent")
+
+            wired_devices[mac] = {
+                "ip_address": entry["ip"],
+                "hostname": hostname if hostname else mac,
+                "connected": connected,
+                "connection_type": "wired",
+                "ap_device": "LAN",
+                "arp_state": entry["state"],
+                "interface": entry["device"]
+            }
+
+            _LOGGER.debug(
+                "Found wired device %s: IP=%s, hostname=%s, connected=%s",
+                mac, entry["ip"], hostname, connected
+            )
+
+        return wired_devices
