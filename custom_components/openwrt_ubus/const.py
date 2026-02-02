@@ -77,6 +77,7 @@ API_SUBSYS_WIRELESS = "network.wireless"
 
 # API methods
 API_METHOD_BOARD = "board"
+API_METHOD_EXEC = "exec"
 API_METHOD_GET = "get"
 API_METHOD_GET_AP = "devices"
 API_METHOD_GET_CLIENTS = "get_clients"

@@ -156,10 +156,14 @@ class Ubus:
                 rpc_call["id"] = rpc.id
             rpc_calls.append(rpc_call)
 
+        payload = json.dumps(rpc_calls)
+        if self.debug_api:
+            _LOGGER.debug("ubus request: %s", payload)
+
         response = await self.session.post(
             url=self.url,
             server_hostname=self.hostname,
-            data=json.dumps(rpc_calls),
+            data=payload,
             timeout=self.timeout,
             verify_ssl=self.verify,
         )
