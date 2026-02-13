@@ -287,18 +287,41 @@ class SharedUbusDataManager:
 
         try:
             # Get MAC to name/IP mapping (includes /etc/ethers)
-            mac2name = await self._get_mac2name_mapping(dhcp_software)
+            mac2name, neighbor_devices = await self._get_mac2name_mapping(dhcp_software)
 
             # Get interface to SSID mapping
             interface_to_ssid = await self._get_interface_to_ssid_mapping()
 
             # Get device statistics and connection info
+            result = {}
             if wireless_software == "hostapd":
-                return await self._fetch_hostapd_data(mac2name, interface_to_ssid)
+                result = await self._fetch_hostapd_data(mac2name, interface_to_ssid)
             elif wireless_software == "iwinfo":
-                return await self._fetch_iwinfo_data(mac2name, interface_to_ssid)
-            else:
-                return {}
+                result = await self._fetch_iwinfo_data(mac2name, interface_to_ssid)
+
+            if "device_statistics" not in result:
+                result["device_statistics"] = {}
+
+            # Merge neighbor devices (wired or non-wireless-reported)
+            for mac, neigh_data in neighbor_devices.items():
+                if mac not in result["device_statistics"]:
+                    hostname_data = mac2name.get(mac, {})
+                    hostname = hostname_data.get("hostname", mac.replace(":", ""))
+
+                    dev = neigh_data.get("dev", "wired")
+
+                    device_info = {
+                        "mac": mac,
+                        "hostname": hostname,
+                        "ap_device": dev,
+                        "ap_ssid": dev,
+                        "connected": True,
+                        "ip_address": neigh_data.get("ip_address"),
+                        "is_wired": True,
+                    }
+                    result["device_statistics"][mac] = device_info
+
+            return result
         except Exception as exc:
             _LOGGER.error("Error fetching device statistics: %s", exc)
             raise UpdateFailed(f"Error fetching device statistics: {exc}")
@@ -475,9 +498,12 @@ class SharedUbusDataManager:
             _LOGGER.debug("iwinfo data fetch error details", exc_info=True)
             raise UpdateFailed(f"Error fetching iwinfo data: {exc}")
 
-    async def _get_mac2name_mapping(self, dhcp_software: str) -> Dict[str, Dict[str, str]]:
+    async def _get_mac2name_mapping(
+        self, dhcp_software: str
+    ) -> tuple[Dict[str, Dict[str, str]], Dict[str, Any]]:
         """Generate MAC to name/IP mapping based on DHCP server."""
         mac2name = {}
+        neighbor_devices = {}
         client = await self._get_ubus_client()
 
         # Get mappings from /etc/ethers
@@ -530,7 +556,76 @@ class SharedUbusDataManager:
         except Exception as exc:
             _LOGGER.warning("Failed to get DHCP MAC to name mapping: %s", exc)
 
-        return mac2name
+        # Get neighbors from ip neigh
+        try:
+            # IPv4
+            lines_v4 = await client.get_ip_neighbors(ipv6=False)
+            self._parse_ip_neigh(lines_v4, mac2name, neighbor_devices)
+
+            # IPv6
+            lines_v6 = await client.get_ip_neighbors(ipv6=True)
+            self._parse_ip_neigh(lines_v6, mac2name, neighbor_devices)
+
+        except Exception as exc:
+            _LOGGER.debug("Error getting ip neighbors: %s", exc)
+
+        return mac2name, neighbor_devices
+
+    def _parse_ip_neigh(
+        self,
+        lines: list[str],
+        mac2name: dict[str, dict[str, str]],
+        neighbor_devices: dict[str, dict[str, Any]],
+    ) -> None:
+        """Parse ip neigh output and update mac2name mapping."""
+        if not lines:
+            return
+
+        for line in lines:
+            parts = line.split()
+            if not parts:
+                continue
+
+            # Format: IP dev DEV [lladdr MAC] ... STATE
+            ip = parts[0]
+            mac = None
+            dev = "unknown"
+            state = parts[-1]
+
+            if "dev" in parts:
+                try:
+                    dev_idx = parts.index("dev") + 1
+                    if dev_idx < len(parts):
+                        dev = parts[dev_idx]
+                except ValueError:
+                    pass
+
+            if "lladdr" in parts:
+                try:
+                    mac_idx = parts.index("lladdr") + 1
+                    if mac_idx < len(parts):
+                        mac = parts[mac_idx]
+                except ValueError:
+                    pass
+
+            if mac:
+                mac_upper = mac.upper()
+                # Only add if not already in mac2name (ethers/dhcp has priority for hostname)
+                if mac_upper not in mac2name:
+                    mac2name[mac_upper] = {
+                        "hostname": ip,
+                        "ip": ip,
+                    }
+                elif not mac2name[mac_upper].get("ip"):
+                    # If we have an entry but no IP, update IP
+                    mac2name[mac_upper]["ip"] = ip
+
+                # Update neighbor devices if reachable
+                if state != "FAILED":
+                    neighbor_devices[mac_upper] = {
+                        "ip_address": ip,
+                        "dev": dev,
+                    }
 
     async def _fetch_conntrack_count(self) -> Dict[str, Any]:
         """Fetch connection tracking count."""
