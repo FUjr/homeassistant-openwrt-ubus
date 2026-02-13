@@ -194,11 +194,12 @@ class Ubus:
                     # Special handling for permission errors
                     if error_code == -32002 or "Access denied" in error_message:
                         _LOGGER.warning(
-                            "Permission denied when calling %s.%s: %s (code: %d)",
+                            "Permission denied when calling %s.%s: %s (code: %d) [session_id: %s]",
                             subsystem,
                             method,
                             error_message,
                             error_code,
+                            self.session_id,
                         )
                         _append_result(
                             PermissionError(
@@ -208,11 +209,12 @@ class Ubus:
                     else:
                         # General error handling
                         _LOGGER.error(
-                            "API call failed for %s.%s: %s (code: %d)",
+                            "API call failed for %s.%s: %s (code: %d) [session_id: %s]",
                             subsystem,
                             method,
                             error_message,
                             error_code,
+                            self.session_id,
                         )
                         _append_result(
                             ConnectionError(
@@ -258,7 +260,7 @@ class Ubus:
                     try:
                         raise session_response
                     except (RPCError, PermissionError) as e:
-                        _LOGGER.warning("Failed to retrieve session expiration: %s", e)
+                        _LOGGER.warning("Failed to retrieve session expiration: %s [session_id: %s]", e, self.session_id)
                 elif isinstance(session_response, list):
                     raise ConnectionError(f"Unexpected session API response format: {session_response}")
                 elif isinstance(session_response, dict):
