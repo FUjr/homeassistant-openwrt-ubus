@@ -27,6 +27,7 @@ from homeassistant.helpers.update_coordinator import (
 from ..const import (
     DOMAIN,
     CONF_USE_HTTPS,
+    CONF_PORT,
     DEFAULT_USE_HTTPS,
     CONF_MWAN3_SENSOR_TIMEOUT,
     DEFAULT_MWAN3_SENSOR_TIMEOUT,
@@ -404,6 +405,7 @@ class MWAN3InterfaceSensor(CoordinatorEntity, SensorEntity):
             configuration_url=build_configuration_url(
                 self._host,
                 self.coordinator.data_manager.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS),
+                self.coordinator.data_manager.entry.data.get(CONF_PORT),
             ),
             via_device=(DOMAIN, f"{self._host}_mwan3"),
         )
@@ -559,6 +561,7 @@ class MWAN3PolicySensor(CoordinatorEntity, SensorEntity):
             configuration_url=build_configuration_url(
                 self._host,
                 self.coordinator.data_manager.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS),
+                self.coordinator.data_manager.entry.data.get(CONF_PORT),
             ),
             via_device=(DOMAIN, f"{self._host}_mwan3"),
         )

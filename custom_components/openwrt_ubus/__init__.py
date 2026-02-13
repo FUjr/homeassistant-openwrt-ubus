@@ -24,6 +24,8 @@ from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
     CONF_USE_HTTPS,
+    CONF_PORT,
+    CONF_ENDPOINT,
     CONF_ENABLE_QMODEM_SENSORS,
     CONF_ENABLE_STA_SENSORS,
     CONF_ENABLE_SYSTEM_SENSORS,
@@ -43,6 +45,7 @@ from .const import (
     DEFAULT_ENABLE_SERVICE_CONTROLS,
     DEFAULT_SELECTED_SERVICES,
     DEFAULT_USE_HTTPS,
+    DEFAULT_ENDPOINT,
     DHCP_SOFTWARES,
     DOMAIN,
     PLATFORMS,
@@ -94,7 +97,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         ip = entry.data.get(CONF_IP_ADDRESS, None)
         use_https = entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)
-        url = build_ubus_url(hostname, use_https, ip)
+        port = entry.data.get(CONF_PORT)
+        endpoint = entry.data.get(CONF_ENDPOINT, DEFAULT_ENDPOINT)
+        url = build_ubus_url(hostname, use_https, ip, port, endpoint)
         session = async_get_clientsession(hass, verify_ssl=entry.data.get(CONF_VERIFY_SSL, False))
         ubus = ExtendedUbus(
             url,

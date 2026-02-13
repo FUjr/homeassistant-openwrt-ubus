@@ -32,6 +32,7 @@ from homeassistant.helpers.update_coordinator import (
 from ..const import (
     DOMAIN,
     CONF_USE_HTTPS,
+    CONF_PORT,
     DEFAULT_USE_HTTPS,
     CONF_QMODEM_SENSOR_TIMEOUT,
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
@@ -282,6 +283,7 @@ class QModemSensor(CoordinatorEntity, SensorEntity):
             configuration_url=build_configuration_url(
                 self._host,
                 self.coordinator.data_manager.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS),
+                self.coordinator.data_manager.entry.data.get(CONF_PORT),
             ),
             via_device=(DOMAIN, self._host),
         )
