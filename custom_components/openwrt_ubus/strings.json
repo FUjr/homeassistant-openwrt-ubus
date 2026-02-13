@@ -28,7 +28,17 @@
           "enable_ap_sensors": "Enable Access Point Sensors",
           "enable_eth_sensors": "Enable Network Interface Sensors",
           "enable_service_controls": "Enable Service Controls",
-          "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)"
+          "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)",
+          "enable_wired_tracker": "Enable Wired Device Tracking"
+        }
+      },
+      "wired_tracker_config": {
+        "title": "OpenWrt ubus - Wired Device Tracker Configuration",
+        "description": "Configure wired device tracking filters for {host}. WARNING: Without filters, many confusing device tracker entities may be created!",
+        "data": {
+          "wired_tracker_name_priority": "Device Name Priority",
+          "wired_tracker_whitelist": "Whitelist (comma-separated IP/MAC prefixes)",
+          "wired_tracker_interfaces": "Interface Filter (comma-separated interface names)"
         }
       },
       "services": {
@@ -80,6 +90,10 @@
           "enable_eth_sensors": "Enable Network Interface Sensors",
           "enable_service_controls": "Enable Service Controls",
           "enable_device_kick_buttons": "Enable Device Kick Buttons",
+          "enable_wired_tracker": "Enable Wired Device Tracking",
+          "wired_tracker_name_priority": "Wired Device Name Priority",
+          "wired_tracker_whitelist": "Wired Device Whitelist",
+          "wired_tracker_interfaces": "Wired Device Interface Filter",
           "selected_services": "Services to Control",
           "refresh_services": "Refresh Services List",
           "system_sensor_timeout": "System Sensor Update Interval (seconds)",
@@ -101,6 +115,10 @@
           "enable_ap_sensors": "Monitor access point interface information (WiFi network details)",
           "enable_eth_sensors": "Monitor network interface statistics",
           "enable_device_kick_buttons": "Enable buttons to disconnect devices from Access Points (requires hostapd)",
+          "enable_wired_tracker": "Track wired devices using IP neighbor tables (filters out WiFi devices)",
+          "wired_tracker_name_priority": "When hostname is not found, use IPv4, IPv6, or MAC address as device name",
+          "wired_tracker_whitelist": "Comma-separated list of IP or MAC prefixes to track (e.g., 192.168.1,fe80,AA:BB:CC). Leave empty to track all non-WiFi devices",
+          "wired_tracker_interfaces": "Comma-separated list of network interfaces to track (e.g., br-lan,eth0). Leave empty to track all interfaces. Useful to filter out unwanted devices",
           "system_sensor_timeout": "How often to update system sensor data (10-300 seconds)",
           "qmodem_sensor_timeout": "How often to update modem sensor data (30-600 seconds)",
           "sta_sensor_timeout": "How often to update station device data (10-300 seconds)",

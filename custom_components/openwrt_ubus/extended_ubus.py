@@ -794,3 +794,124 @@ class ExtendedUbus(Ubus):
     async def get_network_devices(self):
         """Get network device status."""
         return await self.api_call(API_RPC_CALL, "network.device", "status")
+
+    async def get_ip_neighbors(self):
+        """Get neighbor table entries (ARP and NDP) using ip neigh commands.
+
+        Returns:
+            dict: Dictionary with 'ipv4' and 'ipv6' neighbor entries, or error indicator
+        """
+        result = {
+            "ipv4": [],
+            "ipv6": []
+        }
+
+        try:
+            # Execute /sbin/ip -4 neigh show (IPv4)
+            try:
+                ipv4_result = await self.api_call(
+                    API_RPC_CALL,
+                    "file",
+                    "exec",
+                    {
+                        "command": "/sbin/ip",
+                        "params": ["-4", "neigh", "show"]
+                    }
+                )
+                if ipv4_result and "stdout" in ipv4_result:
+                    result["ipv4"] = self._parse_ip_neigh_output(ipv4_result["stdout"], "ipv4")
+            except PermissionError as exc:
+                _LOGGER.warning(
+                    "Permission denied for '/sbin/ip -4 neigh show'. "
+                    "To enable wired device tracking, configure ubus ACL to allow: "
+                    '"/sbin/ip -[46] neigh show" in file.exec permissions. '
+                    "Session ID: %s",
+                    self.session_id or "None"
+                )
+                _LOGGER.debug("Permission error details: %s", exc)
+                return {"error": "permission_denied"}
+            except Exception as exc:
+                _LOGGER.debug("IPv4 neighbor query error: %s", exc)
+
+            # Execute /sbin/ip -6 neigh show (IPv6)
+            try:
+                ipv6_result = await self.api_call(
+                    API_RPC_CALL,
+                    "file",
+                    "exec",
+                    {
+                        "command": "/sbin/ip",
+                        "params": ["-6", "neigh", "show"]
+                    }
+                )
+                if ipv6_result and "stdout" in ipv6_result:
+                    result["ipv6"] = self._parse_ip_neigh_output(ipv6_result["stdout"], "ipv6")
+            except PermissionError as exc:
+                _LOGGER.warning(
+                    "Permission denied for '/sbin/ip -6 neigh show'. "
+                    "To enable wired device tracking, configure ubus ACL to allow: "
+                    '"/sbin/ip -[46] neigh show" in file.exec permissions. '
+                    "Session ID: %s",
+                    self.session_id or "None"
+                )
+                _LOGGER.debug("Permission error details: %s", exc)
+                return {"error": "permission_denied"}
+            except Exception as exc:
+                _LOGGER.debug("IPv6 neighbor query error: %s", exc)
+
+            _LOGGER.debug("Found %d IPv4 and %d IPv6 neighbors", len(result["ipv4"]), len(result["ipv6"]))
+
+        except Exception as exc:
+            _LOGGER.error("Error getting IP neighbors, Session ID: %s - %s", self.session_id or "None", exc)
+
+        return result
+
+    def _parse_ip_neigh_output(self, output, ip_version):
+        """Parse output from ip neigh command.
+
+        Args:
+            output: Command output string
+            ip_version: "ipv4" or "ipv6"
+
+        Returns:
+            list: List of neighbor entries with ip, mac, state, and interface
+        """
+        neighbors = []
+        if not output:
+            return neighbors
+
+        for line in output.strip().split("\n"):
+            if not line.strip():
+                continue
+
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+
+            try:
+                entry = {
+                    "ip": parts[0],
+                    "interface": None,
+                    "mac": None,
+                    "state": None,
+                    "ip_version": ip_version
+                }
+
+                # Parse the line: IP dev INTERFACE lladdr MAC STATE
+                for i, part in enumerate(parts[1:], 1):
+                    if part == "dev" and i + 1 < len(parts):
+                        entry["interface"] = parts[i + 1]
+                    elif part == "lladdr" and i + 1 < len(parts):
+                        entry["mac"] = parts[i + 1].upper()
+                    elif part in ["REACHABLE", "STALE", "DELAY", "PROBE", "FAILED", "PERMANENT", "NOARP"]:
+                        entry["state"] = part
+
+                # Only add entries with a MAC address
+                if entry["mac"]:
+                    neighbors.append(entry)
+
+            except Exception as exc:
+                _LOGGER.debug("Error parsing neighbor line '%s': %s", line, exc)
+                continue
+
+        return neighbors

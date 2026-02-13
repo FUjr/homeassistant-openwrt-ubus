@@ -41,6 +41,10 @@ from .const import (
     CONF_ENABLE_MWAN3_SENSORS,
     CONF_ENABLE_SERVICE_CONTROLS,
     CONF_ENABLE_DEVICE_KICK_BUTTONS,
+    CONF_ENABLE_WIRED_TRACKER,
+    CONF_WIRED_TRACKER_NAME_PRIORITY,
+    CONF_WIRED_TRACKER_WHITELIST,
+    CONF_WIRED_TRACKER_INTERFACES,
     CONF_SELECTED_SERVICES,
     CONF_SYSTEM_SENSOR_TIMEOUT,
     CONF_QMODEM_SENSOR_TIMEOUT,
@@ -63,6 +67,10 @@ from .const import (
     DEFAULT_ENABLE_MWAN3_SENSORS,
     DEFAULT_ENABLE_SERVICE_CONTROLS,
     DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
+    DEFAULT_ENABLE_WIRED_TRACKER,
+    DEFAULT_WIRED_TRACKER_NAME_PRIORITY,
+    DEFAULT_WIRED_TRACKER_WHITELIST,
+    DEFAULT_WIRED_TRACKER_INTERFACES,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
     DEFAULT_STA_SENSOR_TIMEOUT,
@@ -109,6 +117,7 @@ STEP_SENSORS_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_ENABLE_MWAN3_SENSORS, default=DEFAULT_ENABLE_MWAN3_SENSORS): bool,
         vol.Optional(CONF_ENABLE_SERVICE_CONTROLS, default=DEFAULT_ENABLE_SERVICE_CONTROLS): bool,
         vol.Optional(CONF_ENABLE_DEVICE_KICK_BUTTONS, default=DEFAULT_ENABLE_DEVICE_KICK_BUTTONS): bool,
+        vol.Optional(CONF_ENABLE_WIRED_TRACKER, default=DEFAULT_ENABLE_WIRED_TRACKER): bool,
     }
 )
 
@@ -251,6 +260,10 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._sensor_data = user_input
 
+            # If wired tracker is enabled, proceed to wired tracker configuration
+            if user_input.get(CONF_ENABLE_WIRED_TRACKER, False):
+                return await self.async_step_wired_tracker_config()
+
             # If service controls are enabled, proceed to services selection
             if user_input.get(CONF_ENABLE_SERVICE_CONTROLS, False):
                 return await self.async_step_services()
@@ -260,6 +273,42 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="sensors",
             data_schema=STEP_SENSORS_DATA_SCHEMA,
+            description_placeholders={"host": self._connection_data[CONF_HOST]},
+        )
+
+    async def async_step_wired_tracker_config(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle the wired tracker configuration step."""
+        if user_input is not None:
+            # Merge wired tracker config into sensor data
+            self._sensor_data.update(user_input)
+
+            # If service controls are enabled, proceed to services selection
+            if self._sensor_data.get(CONF_ENABLE_SERVICE_CONTROLS, False):
+                return await self.async_step_services()
+
+            return await self.async_step_timeouts()
+
+        # Create schema for wired tracker configuration
+        wired_tracker_schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_WIRED_TRACKER_NAME_PRIORITY,
+                    default=DEFAULT_WIRED_TRACKER_NAME_PRIORITY,
+                ): vol.In(["ipv4", "ipv6", "mac"]),
+                vol.Optional(
+                    CONF_WIRED_TRACKER_WHITELIST,
+                    default="",
+                ): cv.string,
+                vol.Optional(
+                    CONF_WIRED_TRACKER_INTERFACES,
+                    default="",
+                ): cv.string,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="wired_tracker_config",
+            data_schema=wired_tracker_schema,
             description_placeholders={"host": self._connection_data[CONF_HOST]},
         )
 
@@ -306,6 +355,21 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_timeouts(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the timeout configuration step."""
         if user_input is not None:
+            # Process wired tracker whitelist and interfaces from comma-separated strings
+            if CONF_WIRED_TRACKER_WHITELIST in self._sensor_data:
+                whitelist_str = self._sensor_data[CONF_WIRED_TRACKER_WHITELIST]
+                if isinstance(whitelist_str, str):
+                    self._sensor_data[CONF_WIRED_TRACKER_WHITELIST] = [
+                        item.strip() for item in whitelist_str.split(",") if item.strip()
+                    ]
+
+            if CONF_WIRED_TRACKER_INTERFACES in self._sensor_data:
+                interfaces_str = self._sensor_data[CONF_WIRED_TRACKER_INTERFACES]
+                if isinstance(interfaces_str, str):
+                    self._sensor_data[CONF_WIRED_TRACKER_INTERFACES] = [
+                        item.strip() for item in interfaces_str.split(",") if item.strip()
+                    ]
+
             # Combine all configuration data
             config_data = {
                 **self._connection_data,
@@ -338,6 +402,28 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
             # Check if we need to refresh services
             if user_input.get("refresh_services", False):
                 return await self.async_step_services()
+
+            # Process whitelist string into list
+            if CONF_WIRED_TRACKER_WHITELIST in user_input:
+                whitelist_str = user_input.get(CONF_WIRED_TRACKER_WHITELIST, "")
+                if whitelist_str:
+                    # Split by comma and strip whitespace
+                    user_input[CONF_WIRED_TRACKER_WHITELIST] = [
+                        prefix.strip() for prefix in whitelist_str.split(",") if prefix.strip()
+                    ]
+                else:
+                    user_input[CONF_WIRED_TRACKER_WHITELIST] = []
+
+            # Process interfaces string into list
+            if CONF_WIRED_TRACKER_INTERFACES in user_input:
+                interfaces_str = user_input.get(CONF_WIRED_TRACKER_INTERFACES, "")
+                if interfaces_str:
+                    # Split by comma and strip whitespace
+                    user_input[CONF_WIRED_TRACKER_INTERFACES] = [
+                        iface.strip() for iface in interfaces_str.split(",") if iface.strip()
+                    ]
+                else:
+                    user_input[CONF_WIRED_TRACKER_INTERFACES] = []
 
             # Get current data and merge with new options
             new_data = dict(self.config_entry.data)
@@ -412,6 +498,22 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                         DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
                     ),
                 ): bool,
+                vol.Optional(
+                    CONF_ENABLE_WIRED_TRACKER,
+                    default=current_data.get(CONF_ENABLE_WIRED_TRACKER, DEFAULT_ENABLE_WIRED_TRACKER),
+                ): bool,
+                vol.Optional(
+                    CONF_WIRED_TRACKER_NAME_PRIORITY,
+                    default=current_data.get(CONF_WIRED_TRACKER_NAME_PRIORITY, DEFAULT_WIRED_TRACKER_NAME_PRIORITY),
+                ): vol.In(["ipv4", "ipv6", "mac"]),
+                vol.Optional(
+                    CONF_WIRED_TRACKER_WHITELIST,
+                    description={"suggested_value": ",".join(current_data.get(CONF_WIRED_TRACKER_WHITELIST, []))},
+                ): str,
+                vol.Optional(
+                    CONF_WIRED_TRACKER_INTERFACES,
+                    description={"suggested_value": ",".join(current_data.get(CONF_WIRED_TRACKER_INTERFACES, []))},
+                ): str,
                 vol.Optional(
                     CONF_SYSTEM_SENSOR_TIMEOUT,
                     default=current_data.get(CONF_SYSTEM_SENSOR_TIMEOUT, DEFAULT_SYSTEM_SENSOR_TIMEOUT),

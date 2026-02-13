@@ -28,7 +28,17 @@
           "enable_ap_sensors": "Abilita Sensori Access Point",
           "enable_eth_sensors": "Abilita Sensori Interfacce di Rete",
           "enable_service_controls": "Abilita Controlli Servizi",
-          "enable_device_kick_buttons": "Abilita Pulsanti Disconnessione Dispositivi (richiede hostapd)"
+          "enable_device_kick_buttons": "Abilita Pulsanti Disconnessione Dispositivi (richiede hostapd)",
+          "enable_wired_tracker": "Abilita Tracciamento Dispositivi Cablati"
+        }
+      },
+      "wired_tracker_config": {
+        "title": "OpenWrt ubus - Configurazione Tracciamento Dispositivi Cablati",
+        "description": "Configura i filtri per il tracciamento dei dispositivi cablati per {host}. ATTENZIONE: senza filtri, potrebbero essere create molte entità confuse!",
+        "data": {
+          "wired_tracker_name_priority": "Priorità Nome Dispositivo",
+          "wired_tracker_whitelist": "Whitelist (prefissi IP/MAC separati da virgola)",
+          "wired_tracker_interfaces": "Filtro Interfacce (nomi interfacce separati da virgola)"
         }
       },
       "services": {
@@ -80,6 +90,10 @@
           "enable_eth_sensors": "Abilita Sensori Interfacce di Rete",
           "enable_service_controls": "Abilita Controlli Servizi",
           "enable_device_kick_buttons": "Abilita Pulsanti Disconnessione Dispositivi",
+          "enable_wired_tracker": "Abilita Tracciamento Dispositivi Cablati",
+          "wired_tracker_name_priority": "Priorità Nome Dispositivo Cablato",
+          "wired_tracker_whitelist": "Whitelist Dispositivi Cablati",
+          "wired_tracker_interfaces": "Filtro Interfacce Dispositivi Cablati",
           "selected_services": "Servizi da Controllare",
           "refresh_services": "Aggiorna Lista Servizi",
           "system_sensor_timeout": "Intervallo Aggiornamento Sensori di Sistema (secondi)",
@@ -97,6 +111,10 @@
           "enable_ap_sensors": "Monitora le informazioni dell'interfaccia Access Point (dettagli rete WiFi)",
           "enable_eth_sensors": "Monitora le statistiche delle interfacce di rete",
           "enable_device_kick_buttons": "Abilita i pulsanti per disconnettere i dispositivi dagli Access Point (richiede hostapd)",
+          "enable_wired_tracker": "Traccia dispositivi cablati utilizzando la tabella dei vicini IP (filtra dispositivi WiFi)",
+          "wired_tracker_name_priority": "Quando non viene trovato un hostname, usa IPv4, IPv6 o indirizzo MAC come nome del dispositivo",
+          "wired_tracker_whitelist": "Elenco di prefissi IP o MAC per monitorare solo determinati dispositivi (lascia vuoto per monitorare tutti)",
+          "wired_tracker_interfaces": "Elenco di interfacce di rete da monitorare, separati da virgola (ad es. br-lan,eth0). Lascia vuoto per monitorare tutte le interfacce. Utile per filtrare dispositivi indesiderati",
           "system_sensor_timeout": "Frequenza di aggiornamento dei dati dei sensori di sistema (10-300 secondi)",
           "qmodem_sensor_timeout": "Frequenza di aggiornamento dei dati dei sensori modem (30-600 secondi)",
           "sta_sensor_timeout": "Frequenza di aggiornamento dei dati dei dispositivi client (10-300 secondi)",

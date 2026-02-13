@@ -32,9 +32,11 @@ from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
     CONF_TRACKING_METHOD,
+    CONF_ENABLE_WIRED_TRACKER,
     DEFAULT_DHCP_SOFTWARE,
     DEFAULT_WIRELESS_SOFTWARE,
     DEFAULT_TRACKING_METHOD,
+    DEFAULT_ENABLE_WIRED_TRACKER,
     DHCP_SOFTWARES,
     DOMAIN,
     WIRELESS_SOFTWARES,
@@ -195,11 +197,22 @@ async def async_setup_entry(
     data_manager_key = f"data_manager_{entry.entry_id}"
     data_manager = hass.data[DOMAIN][data_manager_key]
 
+    # Check if wired tracker is enabled
+    enable_wired_tracker = entry.options.get(
+        CONF_ENABLE_WIRED_TRACKER,
+        entry.data.get(CONF_ENABLE_WIRED_TRACKER, DEFAULT_ENABLE_WIRED_TRACKER),
+    )
+
+    # Determine which data types the coordinator needs
+    data_types = ["device_statistics"]  # WiFi devices
+    if enable_wired_tracker:
+        data_types.append("wired_devices")  # Add wired devices if enabled
+
     # Create coordinator using shared data manager
     coordinator = SharedDataUpdateCoordinator(
         hass,
         data_manager,
-        ["device_statistics"],  # Data types this coordinator needs
+        data_types,  # Data types this coordinator needs
         f"{DOMAIN}_tracker_{entry.data[CONF_HOST]}",
         SCAN_INTERVAL,
     )
@@ -228,12 +241,27 @@ async def async_setup_entry(
     # Add update listener for dynamic device creation
     async def _handle_coordinator_update_async():
         """Handle coordinator updates and create new entities for new devices."""
-        if not coordinator.data or "device_statistics" not in coordinator.data:
+        if not coordinator.data:
             return
 
-        device_stats = coordinator.data["device_statistics"]
-        # Extract MAC addresses from device statistics
-        current_devices = set(device_stats.keys())
+        # Merge device_statistics and wired_devices
+        all_devices = {}
+        
+        # Add WiFi devices
+        if "device_statistics" in coordinator.data:
+            device_stats = coordinator.data["device_statistics"]
+            all_devices.update(device_stats)
+        
+        # Add wired devices
+        if enable_wired_tracker and "wired_devices" in coordinator.data:
+            wired_devices = coordinator.data["wired_devices"]
+            # Merge wired devices, but WiFi devices take priority
+            for mac, device_info in wired_devices.items():
+                if mac not in all_devices:
+                    all_devices[mac] = device_info
+
+        # Extract MAC addresses from all devices
+        current_devices = set(all_devices.keys())
         new_devices = current_devices - coordinator.known_devices
 
         if new_devices:
@@ -254,9 +282,24 @@ async def async_setup_entry(
         _LOGGER.warning("Initial data fetch failed, will retry automatically: %s", exc)
 
     # Create device tracker entities for each detected device
-    if coordinator.data and coordinator.data.get("device_statistics"):
-        device_stats = coordinator.data["device_statistics"]
-        device_macs = set(device_stats.keys())
+    if coordinator.data:
+        # Merge device_statistics and wired_devices
+        all_devices = {}
+        
+        # Add WiFi devices
+        if "device_statistics" in coordinator.data:
+            device_stats = coordinator.data["device_statistics"]
+            all_devices.update(device_stats)
+        
+        # Add wired devices
+        if enable_wired_tracker and "wired_devices" in coordinator.data:
+            wired_devices = coordinator.data["wired_devices"]
+            # Merge wired devices, but WiFi devices take priority
+            for mac, device_info in wired_devices.items():
+                if mac not in all_devices:
+                    all_devices[mac] = device_info
+
+        device_macs = set(all_devices.keys())
         _LOGGER.info("Initial scan found %d devices", len(device_macs))
         _LOGGER.debug("Initial devices detected: %s", device_macs)
 
@@ -650,19 +693,39 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
         }
 
         if device_data:
+            # Determine connection type
+            connection_type = "wireless"
+            if "ap_device" not in device_data:
+                # If no ap_device, it's likely a wired device
+                connection_type = "wired"
+            
             attributes.update(
                 {
                     "name": self._get_device_name(),
-                    "ap_device": device_data.get("ap_device", "Unknown AP"),
                     "hostname": device_data.get("hostname", self.mac_address),
-                    "connection_type": "wireless",
+                    "connection_type": connection_type,
                     "router": current_router,  # Show router where device is currently connected
                     "ip_address": device_data.get("ip_address", "Unknown IP"),
                 }
             )
-            # Add SSID if available
-            if "ap_ssid" in device_data:
-                attributes["ssid"] = device_data.get("ap_ssid", "Unknown SSID")
+            
+            # Add wireless-specific attributes
+            if connection_type == "wireless":
+                attributes["ap_device"] = device_data.get("ap_device", "Unknown AP")
+                # Add SSID if available
+                if "ap_ssid" in device_data:
+                    attributes["ssid"] = device_data.get("ap_ssid", "Unknown SSID")
+            else:
+                # Add wired-specific attributes
+                if "interface" in device_data:
+                    attributes["interface"] = device_data.get("interface")
+                # Add IPv4/IPv6 addresses for wired devices
+                if "ipv4" in device_data and device_data.get("ipv4"):
+                    attributes["ipv4"] = device_data.get("ipv4")
+                if "ipv6" in device_data and device_data.get("ipv6"):
+                    attributes["ipv6"] = device_data.get("ipv6")
+                if "state" in device_data:
+                    attributes["neighbor_state"] = device_data.get("state")
         else:
             attributes.update(
                 {
@@ -673,8 +736,17 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
         return attributes
 
     def _device_data(self) -> dict[str, Any] | None:
+        """Get device data from either device_statistics (WiFi) or wired_devices."""
+        # Try WiFi devices first
         device_stats = self.coordinator.data.get("device_statistics", {})
-        return device_stats.get(self._attr_mac_address) or device_stats.get(self._attr_mac_address.upper())
+        device_data = device_stats.get(self._attr_mac_address) or device_stats.get(self._attr_mac_address.upper())
+        if device_data:
+            return device_data
+        
+        # Try wired devices
+        wired_devices = self.coordinator.data.get("wired_devices", {})
+        wired_data = wired_devices.get(self._attr_mac_address) or wired_devices.get(self._attr_mac_address.upper())
+        return wired_data
 
     @property
     def hostname(self) -> str | None:

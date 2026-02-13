@@ -104,6 +104,7 @@ class SharedUbusDataManager:
             "system_temperatures": timedelta(seconds=system_timeout),  # System temperature sensors
             "dhcp_clients_count": timedelta(seconds=sta_timeout),  # DHCP clients count
             "network_devices": timedelta(seconds=system_timeout),  # Network device status
+            "wired_devices": timedelta(seconds=sta_timeout),  # Wired device tracking
         }
         self._update_locks: Dict[str, asyncio.Lock] = {key: asyncio.Lock() for key in self._update_intervals}
 
@@ -613,6 +614,213 @@ class SharedUbusDataManager:
             _LOGGER.error("Error fetching network devices: %s", exc, exc_info=True)
             raise UpdateFailed(f"Error fetching network devices: {exc}")
 
+    async def _fetch_wired_devices(self) -> Dict[str, Any]:
+        """Fetch wired device information from IP neighbor tables.
+        
+        Returns:
+            dict: Dictionary with wired_devices data
+        """
+        from .const import (
+            CONF_ENABLE_WIRED_TRACKER,
+            CONF_WIRED_TRACKER_NAME_PRIORITY,
+            CONF_WIRED_TRACKER_WHITELIST,
+            CONF_WIRED_TRACKER_INTERFACES,
+            DEFAULT_ENABLE_WIRED_TRACKER,
+            DEFAULT_WIRED_TRACKER_NAME_PRIORITY,
+            DEFAULT_WIRED_TRACKER_WHITELIST,
+            DEFAULT_WIRED_TRACKER_INTERFACES,
+        )
+
+        # Check if wired tracker is enabled
+        enabled = self.entry.options.get(
+            CONF_ENABLE_WIRED_TRACKER,
+            self.entry.data.get(CONF_ENABLE_WIRED_TRACKER, DEFAULT_ENABLE_WIRED_TRACKER),
+        )
+        
+        if not enabled:
+            return {"wired_devices": {}}
+
+        client = await self._get_ubus_client()
+        try:
+            # Get neighbor tables
+            neighbors = await client.get_ip_neighbors()
+            
+            # Check for permission error
+            if isinstance(neighbors, dict) and neighbors.get("error") == "permission_denied":
+                _LOGGER.warning(
+                    "Wired device tracking requires ubus file.exec permission. "
+                    "Please configure OpenWrt ubus ACL to grant 'file' read access. "
+                    "See: https://openwrt.org/docs/techref/ubus#acls "
+                    "Wired device tracking will be disabled until permissions are granted."
+                )
+                return {"wired_devices": {}}
+            
+            # Get configuration
+            name_priority = self.entry.options.get(
+                CONF_WIRED_TRACKER_NAME_PRIORITY,
+                self.entry.data.get(CONF_WIRED_TRACKER_NAME_PRIORITY, DEFAULT_WIRED_TRACKER_NAME_PRIORITY),
+            )
+            whitelist = self.entry.options.get(
+                CONF_WIRED_TRACKER_WHITELIST,
+                self.entry.data.get(CONF_WIRED_TRACKER_WHITELIST, DEFAULT_WIRED_TRACKER_WHITELIST),
+            )
+            interface_filter = self.entry.options.get(
+                CONF_WIRED_TRACKER_INTERFACES,
+                self.entry.data.get(CONF_WIRED_TRACKER_INTERFACES, DEFAULT_WIRED_TRACKER_INTERFACES),
+            )
+
+            # Warn if no filtering is configured
+            if not whitelist and not interface_filter:
+                _LOGGER.warning(
+                    "Wired device tracker is enabled without any filters (whitelist or interface). "
+                    "This may create many confusing device tracker entities. "
+                    "Consider configuring whitelist (IP/MAC prefixes) or interface filter (e.g., br-lan) "
+                    "in the integration options to limit tracked devices."
+                )
+
+            # Get WiFi device MACs to filter out
+            wifi_macs = set()
+            try:
+                # Try to get device_statistics to filter WiFi devices
+                device_stats_data = await self.get_data("device_statistics")
+                if device_stats_data and "device_statistics" in device_stats_data:
+                    wifi_macs = set(device_stats_data["device_statistics"].keys())
+                    _LOGGER.debug("Found %d WiFi devices to filter out", len(wifi_macs))
+            except Exception as exc:
+                _LOGGER.debug("Could not get WiFi device list for filtering: %s", exc)
+
+            # Merge IPv4 and IPv6 neighbors by MAC address
+            wired_devices = {}
+            
+            for ip_version in ["ipv4", "ipv6"]:
+                for neighbor in neighbors.get(ip_version, []):
+                    mac = neighbor.get("mac")
+                    if not mac:
+                        continue
+                    
+                    # Filter out WiFi devices
+                    if mac in wifi_macs:
+                        _LOGGER.debug("Filtering out WiFi device: %s", mac)
+                        continue
+                    
+                    # Apply interface filtering
+                    if interface_filter and not self._matches_interface(neighbor, interface_filter):
+                        _LOGGER.debug(
+                            "Device %s on interface %s does not match interface filter, skipping",
+                            mac,
+                            neighbor.get("interface"),
+                        )
+                        continue
+                    
+                    # Apply whitelist filtering
+                    if whitelist and not self._matches_whitelist(neighbor, mac, whitelist):
+                        _LOGGER.debug("Device %s does not match whitelist, skipping", mac)
+                        continue
+                    
+                    # Merge or create device entry
+                    if mac not in wired_devices:
+                        wired_devices[mac] = {
+                            "mac": mac,
+                            "ipv4": None,
+                            "ipv6": None,
+                            "interface": neighbor.get("interface"),
+                            "state": neighbor.get("state"),
+                            "connected": True,
+                        }
+                    
+                    # Update IP addresses
+                    if ip_version == "ipv4":
+                        wired_devices[mac]["ipv4"] = neighbor.get("ip")
+                    else:
+                        wired_devices[mac]["ipv6"] = neighbor.get("ip")
+                    
+                    # Update state if more recent
+                    if neighbor.get("state") in ["REACHABLE", "PERMANENT"]:
+                        wired_devices[mac]["state"] = neighbor.get("state")
+
+            # Get hostname mapping
+            dhcp_software = self.entry.data.get(CONF_DHCP_SOFTWARE, DEFAULT_DHCP_SOFTWARE)
+            mac2name = await self._get_mac2name_mapping(dhcp_software)
+
+            # Set display name based on priority
+            for mac, device in wired_devices.items():
+                hostname_data = mac2name.get(mac, {})
+                hostname_from_dhcp = hostname_data.get("hostname", "")
+                
+                if hostname_from_dhcp:
+                    device["hostname"] = hostname_from_dhcp
+                else:
+                    # No hostname, use priority
+                    if name_priority == "ipv4" and device["ipv4"]:
+                        device["hostname"] = device["ipv4"]
+                    elif name_priority == "ipv6" and device["ipv6"]:
+                        device["hostname"] = device["ipv6"]
+                    elif name_priority == "mac":
+                        device["hostname"] = mac.replace(":", "")
+                    else:
+                        # Fallback: try ipv4, then ipv6, then mac
+                        device["hostname"] = device["ipv4"] or device["ipv6"] or mac.replace(":", "")
+
+            _LOGGER.debug("Found %d wired devices after filtering", len(wired_devices))
+            return {"wired_devices": wired_devices}
+
+        except Exception as exc:
+            _LOGGER.error("Error fetching wired devices: %s", exc, exc_info=True)
+            return {"wired_devices": {}}
+
+    def _matches_interface(self, neighbor: dict, interface_filter: list) -> bool:
+        """Check if a neighbor's interface matches any interface filter entry.
+        
+        Args:
+            neighbor: Neighbor entry with interface field
+            interface_filter: List of interface names (e.g., ["br-lan", "eth0"])
+            
+        Returns:
+            bool: True if matches interface filter or filter is empty
+        """
+        # Empty filter means no filtering
+        if not interface_filter:
+            return True
+        
+        neighbor_interface = neighbor.get("interface", "")
+        if not neighbor_interface:
+            return False
+        
+        # Check if interface matches any in the filter list
+        return neighbor_interface in interface_filter
+
+    def _matches_whitelist(self, neighbor: dict, mac: str, whitelist: list) -> bool:
+        """Check if a neighbor matches any whitelist entry.
+        
+        Args:
+            neighbor: Neighbor entry with ip, mac, etc.
+            mac: MAC address
+            whitelist: List of prefix strings (IP or MAC prefixes)
+            
+        Returns:
+            bool: True if matches whitelist or whitelist is empty
+        """
+        # Empty whitelist means no filtering
+        if not whitelist:
+            return True
+        
+        ip_addr = neighbor.get("ip", "")
+        
+        for prefix in whitelist:
+            prefix = prefix.strip()
+            if not prefix:
+                continue
+            
+            # Check if it matches IP address
+            if ip_addr.startswith(prefix):
+                return True
+            
+            # Check if it matches MAC address
+            if mac.upper().startswith(prefix.upper()):
+                return True
+        
+        return False
+
     async def _fetch_system_data_batch(self, system_types: set) -> Dict[str, Any]:
         """Fetch system data in batch with auto-reconnect protection."""
         combined_data = {}
@@ -692,6 +900,8 @@ class SharedUbusDataManager:
                     data = await self._fetch_dhcp_clients_count()
                 elif data_type == "network_devices":
                     data = await self._fetch_network_devices()
+                elif data_type == "wired_devices":
+                    data = await self._fetch_wired_devices()
                 else:
                     # Defensive: This should not happen due to the check above, but log just in case
                     _LOGGER.error(

@@ -30,6 +30,12 @@ CONF_ENABLE_SERVICE_CONTROLS = "enable_service_controls"
 CONF_ENABLE_DEVICE_KICK_BUTTONS = "enable_device_kick_buttons"
 CONF_SELECTED_SERVICES = "selected_services"
 
+# Wired device tracker configuration
+CONF_ENABLE_WIRED_TRACKER = "enable_wired_tracker"
+CONF_WIRED_TRACKER_NAME_PRIORITY = "wired_tracker_name_priority"
+CONF_WIRED_TRACKER_WHITELIST = "wired_tracker_whitelist"
+CONF_WIRED_TRACKER_INTERFACES = "wired_tracker_interfaces"
+
 # Timeout configuration
 CONF_SYSTEM_SENSOR_TIMEOUT = "system_sensor_timeout"
 CONF_QMODEM_SENSOR_TIMEOUT = "qmodem_sensor_timeout"
@@ -60,6 +66,12 @@ DEFAULT_STA_SENSOR_TIMEOUT = 30
 DEFAULT_AP_SENSOR_TIMEOUT = 60
 DEFAULT_MWAN3_SENSOR_TIMEOUT = 60
 DEFAULT_SERVICE_TIMEOUT = 30
+
+# Wired device tracker defaults
+DEFAULT_ENABLE_WIRED_TRACKER = False
+DEFAULT_WIRED_TRACKER_NAME_PRIORITY = "ipv4"  # Options: ipv4, ipv6, mac
+DEFAULT_WIRED_TRACKER_WHITELIST = []  # Empty list means no filtering
+DEFAULT_WIRED_TRACKER_INTERFACES = []  # Empty list means no interface filtering
 
 # API constants - moved from Ubus/const.py
 API_RPC_CALL = "call"

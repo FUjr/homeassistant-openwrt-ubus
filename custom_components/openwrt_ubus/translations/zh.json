@@ -25,8 +25,11 @@
           "enable_qmodem_sensors": "启用调制解调器传感器",
           "enable_sta_sensors": "启用站点（WiFi设备）传感器",
           "enable_ap_sensors": "启用接入点传感器",
+          "enable_eth_sensors": "启用网络接口传感器",
+          "enable_mwan3_sensors": "启用 mwan3 传感器（如果已安装 mwan3）",
           "enable_service_controls": "启用服务控制",
-          "enable_device_kick_buttons": "启用设备踢出按钮（需要hostapd）"
+          "enable_device_kick_buttons": "启用设备踢出按钮（需要hostapd）",
+          "enable_wired_tracker": "启用有线设备跟踪"
         }
       },
       "services": {
@@ -75,13 +78,45 @@
           "enable_qmodem_sensors": "启用调制解调器传感器",
           "enable_sta_sensors": "启用站点（WiFi设备）传感器",
           "enable_ap_sensors": "启用接入点传感器",
+          "enable_eth_sensors": "启用网络接口传感器",
+          "enable_mwan3_sensors": "启用 mwan3 传感器（如果已安装 mwan3）",
           "enable_service_controls": "启用服务控制",
+          "enable_device_kick_buttons": "启用设备踢出按钮",
+          "enable_wired_tracker": "启用有线设备跟踪",
+          "wired_tracker_name_priority": "有线设备名称优先级",
+          "wired_tracker_whitelist": "有线设备白名单",
+          "wired_tracker_interfaces": "有线设备接口过滤器",
           "selected_services": "要控制的服务",
           "refresh_services": "刷新服务列表",
           "system_sensor_timeout": "系统传感器更新间隔（秒）",
           "qmodem_sensor_timeout": "调制解调器传感器更新间隔（秒）",
           "sta_sensor_timeout": "站点传感器更新间隔（秒）",
-          "ap_sensor_timeout": "接入点传感器更新间隔（秒）"
+          "ap_sensor_timeout": "接入点传感器更新间隔（秒）",
+          "mwan3_sensor_timeout": "mwan3 状态更新间隔（秒）",
+          "tracking_method": "设备跟踪方法"
+        },
+        "data_description": {
+          "use_https": "连接路由器时是否使用 HTTPS (SSL/TLS)",
+          "port": "自定义端口号（留空使用默认值：HTTP=80，HTTPS=443）",
+          "verify_ssl": "连接路由器时是否验证 SSL 证书",
+          "endpoint": "自定义 ubus 端点路径（默认：ubus）。如果路由器使用反向代理或自定义路径，请修改此项",
+          "wireless_software": "用于获取无线信息的软件（iwinfo 或 hostapd）",
+          "dhcp_software": "用于获取 DHCP 租约信息的软件",
+          "enable_system_sensors": "监控路由器系统信息（运行时间、内存、负载）",
+          "enable_qmodem_sensors": "监控蜂窝调制解调器信息（如果可用）",
+          "enable_sta_sensors": "监控已连接的 WiFi 设备及其统计信息",
+          "enable_ap_sensors": "监控接入点接口信息（WiFi 网络详情）",
+          "enable_eth_sensors": "监控网络接口统计信息",
+          "enable_device_kick_buttons": "启用从接入点断开设备的按钮（需要 hostapd）",
+          "enable_wired_tracker": "使用 IP 邻居表跟踪有线设备（过滤 WiFi 设备）",
+          "wired_tracker_name_priority": "当找不到主机名时，使用 IPv4、IPv6 还是 MAC 地址作为设备名称",
+          "wired_tracker_whitelist": "要跟踪的 IP 或 MAC 前缀列表，用逗号分隔（例如：192.168.1,fe80,AA:BB:CC）。留空则跟踪所有非 WiFi 设备",          "wired_tracker_interfaces": "要跟踪的网络接口列表，用逗号分隔（例如 br-lan,eth0）。留空表示跟踪所有接口。用于过滤不需要的设备",          "system_sensor_timeout": "系统传感器数据更新频率（10-300 秒）",
+          "qmodem_sensor_timeout": "调制解调器传感器数据更新频率（30-600 秒）",
+          "sta_sensor_timeout": "站点设备数据更新频率（10-300 秒）",
+          "ap_sensor_timeout": "接入点数据更新频率（30-600 秒）",
+          "tracking_method": "设备跟踪方法：'uniqueid' 仅使用 MAC 地址（设备在 AP 间漫游），'combined' 使用 AP+MAC（每个 AP 单独的实体）",
+          "mwan3_sensor_timeout": "mwan3 状态数据更新频率（30-600 秒）",
+          "enable_mwan3_sensors": "监控 mwan3 多 WAN 负载均衡状态"
         }
       },
       "sensors": {
