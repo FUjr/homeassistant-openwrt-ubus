@@ -6,6 +6,7 @@ DOMAIN = "openwrt_ubus"
 PLATFORMS = [Platform.DEVICE_TRACKER, Platform.SENSOR, Platform.SWITCH, Platform.BUTTON]
 
 # Configuration constants
+CONF_USE_HTTPS = "use_https"
 CONF_DHCP_SOFTWARE = "dhcp_software"
 CONF_WIRELESS_SOFTWARE = "wireless_software"
 DEFAULT_DHCP_SOFTWARE = "dnsmasq"
@@ -36,6 +37,7 @@ CONF_MWAN3_SENSOR_TIMEOUT = "mwan3_sensor_timeout"
 CONF_SERVICE_TIMEOUT = "service_timeout"
 
 # Default values
+DEFAULT_USE_HTTPS = False
 DEFAULT_ENABLE_QMODEM_SENSORS = True
 DEFAULT_ENABLE_STA_SENSORS = True
 DEFAULT_ENABLE_SYSTEM_SENSORS = True
@@ -92,3 +94,16 @@ API_METHOD_LIST = "list"
 API_METHOD_INIT = "init"
 API_METHOD_SET = "set"
 API_METHOD_COMMIT = "commit"
+
+
+def build_ubus_url(host: str, use_https: bool = False, ip_address: str | None = None) -> str:
+    """Build the ubus URL based on protocol and host."""
+    scheme = "https" if use_https else "http"
+    target = ip_address if ip_address else host
+    return f"{scheme}://{target}/ubus"
+
+
+def build_configuration_url(host: str, use_https: bool = False) -> str:
+    """Build the configuration URL for device info."""
+    scheme = "https" if use_https else "http"
+    return f"{scheme}://{host}"

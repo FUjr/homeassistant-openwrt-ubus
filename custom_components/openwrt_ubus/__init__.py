@@ -23,6 +23,7 @@ from .Ubus.const import API_DEF_TIMEOUT
 from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
+    CONF_USE_HTTPS,
     CONF_ENABLE_QMODEM_SENSORS,
     CONF_ENABLE_STA_SENSORS,
     CONF_ENABLE_SYSTEM_SENSORS,
@@ -41,10 +42,12 @@ from .const import (
     DEFAULT_ENABLE_MWAN3_SENSORS,
     DEFAULT_ENABLE_SERVICE_CONTROLS,
     DEFAULT_SELECTED_SERVICES,
+    DEFAULT_USE_HTTPS,
     DHCP_SOFTWARES,
     DOMAIN,
     PLATFORMS,
     WIRELESS_SOFTWARES,
+    build_ubus_url,
 )
 from .extended_ubus import ExtendedUbus
 from .shared_data_manager import SharedUbusDataManager
@@ -90,8 +93,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hostname = entry.data[CONF_HOST]
     try:
         ip = entry.data.get(CONF_IP_ADDRESS, None)
-        url = f"http://{ip if ip else hostname}/ubus"
-        session = async_get_clientsession(hass)
+        use_https = entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)
+        url = build_ubus_url(hostname, use_https, ip)
+        session = async_get_clientsession(hass, verify_ssl=entry.data.get(CONF_VERIFY_SSL, False))
         ubus = ExtendedUbus(
             url,
             hostname,

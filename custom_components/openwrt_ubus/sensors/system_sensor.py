@@ -35,8 +35,12 @@ from homeassistant.helpers.update_coordinator import (
 
 from ..const import (
     DOMAIN,
+    CONF_USE_HTTPS,
+    DEFAULT_USE_HTTPS,
     CONF_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
+    build_ubus_url,
+    build_configuration_url,
 )
 from ..shared_data_manager import SharedDataUpdateCoordinator
 
@@ -279,7 +283,8 @@ class SystemInfoCoordinator(DataUpdateCoordinator):
         # Get Home Assistant's HTTP client session
         session = async_get_clientsession(hass)
 
-        self.url = f"http://{self.host}/ubus"
+        use_https = entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)
+        self.url = build_ubus_url(self.host, use_https)
 
 
 class SystemInfoSensor(CoordinatorEntity, SensorEntity):
@@ -319,7 +324,10 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
             name=device_name,
             manufacturer="OpenWrt",
             model=board_model,
-            configuration_url=f"http://{self._host}",
+            configuration_url=build_configuration_url(
+                self._host,
+                self.coordinator.data_manager.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS),
+            ),
             sw_version=board_system,  # Use system info as software version
         )
 
