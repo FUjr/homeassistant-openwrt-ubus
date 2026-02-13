@@ -27,9 +27,10 @@
           "enable_sta_sensors": "Enable Station (WiFi Device) Sensors",
           "enable_ap_sensors": "Enable Access Point Sensors",
           "enable_eth_sensors": "Enable Network Interface Sensors",
+          "enable_mwan3_sensors": "Enable mwan3 Sensors (if mwan3 is installed)",
           "enable_service_controls": "Enable Service Controls",
           "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)",
-          "enable_mwan3_sensors": "Enable mwan3 Sensors (if mwan3 is installed)"
+          "enable_wired_tracker": "Enable Wired Device Tracking"
         }
       },
       "services": {
@@ -80,19 +81,26 @@
           "enable_sta_sensors": "Enable Station (WiFi Device) Sensors",
           "enable_ap_sensors": "Enable Access Point Sensors",
           "enable_eth_sensors": "Enable Network Interface Sensors",
+          "enable_mwan3_sensors": "Enable mwan3 Sensors (if mwan3 is installed)",
           "enable_service_controls": "Enable Service Controls",
           "enable_device_kick_buttons": "Enable Device Kick Buttons",
+          "enable_wired_tracker": "Enable Wired Device Tracking",
+          "wired_tracker_name_priority": "Wired Device Name Priority",
+          "wired_tracker_whitelist": "Wired Device Whitelist",
           "selected_services": "Services to Control",
           "refresh_services": "Refresh Services List",
           "system_sensor_timeout": "System Sensor Update Interval (seconds)",
           "qmodem_sensor_timeout": "QModem Sensor Update Interval (seconds)",
           "sta_sensor_timeout": "Station Sensor Update Interval (seconds)",
           "ap_sensor_timeout": "Access Point Sensor Update Interval (seconds)",
-          "tracking_method": "Tracking Method",
-          "enable_mwan3_sensors": "Enable mwan3 Sensors (if mwan3 is installed)",
-          "mwan3_sensor_timeout": "mwan3 Status Update Interval (seconds)"
+          "mwan3_sensor_timeout": "mwan3 Status Update Interval (seconds)",
+          "tracking_method": "Tracking Method"
         },
         "data_description": {
+          "use_https": "Whether to use HTTPS (SSL/TLS) when connecting to the router",
+          "port": "Custom port number (leave empty for default: HTTP=80, HTTPS=443)",
+          "verify_ssl": "Whether to verify the SSL certificate when connecting to the router",
+          "endpoint": "Custom ubus endpoint path (default: ubus). Change this if your router uses a reverse proxy or custom path",
           "wireless_software": "Software used to get wireless information (iwinfo or hostapd)",
           "dhcp_software": "Software used to get DHCP lease information",
           "enable_system_sensors": "Monitor router system information (uptime, memory, load)",
@@ -101,6 +109,9 @@
           "enable_ap_sensors": "Monitor access point interface information (WiFi network details)",
           "enable_eth_sensors": "Monitor network interface statistics",
           "enable_device_kick_buttons": "Enable buttons to disconnect devices from Access Points (requires hostapd)",
+          "enable_wired_tracker": "Track wired devices using IP neighbor tables (filters out WiFi devices)",
+          "wired_tracker_name_priority": "When hostname is not found, use IPv4, IPv6, or MAC address as device name",
+          "wired_tracker_whitelist": "Comma-separated list of IP or MAC prefixes to track (e.g., 192.168.1,fe80,AA:BB:CC). Leave empty to track all non-WiFi devices",
           "system_sensor_timeout": "How often to update system sensor data (10-300 seconds)",
           "qmodem_sensor_timeout": "How often to update modem sensor data (30-600 seconds)",
           "sta_sensor_timeout": "How often to update station device data (10-300 seconds)",
