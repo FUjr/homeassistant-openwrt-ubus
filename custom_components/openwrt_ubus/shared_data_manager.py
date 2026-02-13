@@ -23,6 +23,7 @@ from . import API_DEF_TIMEOUT
 from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
+    CONF_USE_HTTPS,
     CONF_SYSTEM_SENSOR_TIMEOUT,
     CONF_QMODEM_SENSOR_TIMEOUT,
     CONF_STA_SENSOR_TIMEOUT,
@@ -32,12 +33,14 @@ from .const import (
     DOMAIN,
     DEFAULT_DHCP_SOFTWARE,
     DEFAULT_WIRELESS_SOFTWARE,
+    DEFAULT_USE_HTTPS,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
     DEFAULT_STA_SENSOR_TIMEOUT,
     DEFAULT_AP_SENSOR_TIMEOUT,
     DEFAULT_MWAN3_SENSOR_TIMEOUT,
     DEFAULT_SERVICE_TIMEOUT,
+    build_ubus_url,
 )
 from .extended_ubus import ExtendedUbus
 
@@ -114,11 +117,15 @@ class SharedUbusDataManager:
         """Get or create ubus client instance."""
         if client_type not in self._ubus_clients:
             if self._session is None:
-                self._session = async_get_clientsession(self.hass)
+                self._session = async_get_clientsession(
+                    self.hass,
+                    verify_ssl=self.entry.data.get(CONF_VERIFY_SSL, False),
+                )
 
             hostname = self.entry.data[CONF_HOST]
             ip = self.entry.data.get(CONF_IP_ADDRESS, None)
-            url = f"http://{ip if ip else hostname}/ubus"
+            use_https = self.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)
+            url = build_ubus_url(hostname, use_https, ip)
             username = self.entry.data[CONF_USERNAME]
             password = self.entry.data[CONF_PASSWORD]
 

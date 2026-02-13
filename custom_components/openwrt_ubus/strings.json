@@ -7,6 +7,7 @@
         "data": {
           "host": "Host",
           "ip_address": "IP Address",
+          "use_https": "Use HTTPS",
           "verify_ssl": "Verify SSL Certificate",
           "username": "Username",
           "password": "Password",
@@ -64,6 +65,7 @@
         "title": "Configure OpenWrt ubus Integration",
         "description": "Configure sensor types, timeouts, and other options for your OpenWrt device",
         "data": {
+          "use_https": "Use HTTPS",
           "verify_ssl": "Verify SSL Certificate",
           "wireless_software": "Wireless Software",
           "dhcp_software": "DHCP Software",
@@ -83,6 +85,7 @@
           "tracking_method": "Tracking Method"
         },
         "data_description": {
+          "use_https": "Whether to use HTTPS (SSL/TLS) when connecting to the router",
           "verify_ssl": "Whether to verify the SSL certificate when connecting to the router",
           "wireless_software": "Software used to get wireless information (iwinfo or hostapd)",
           "dhcp_software": "Software used to get DHCP lease information",

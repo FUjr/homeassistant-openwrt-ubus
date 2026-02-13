@@ -30,6 +30,7 @@ from .Ubus.const import API_RPC_CALL
 from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
+    CONF_USE_HTTPS,
     CONF_ENABLE_QMODEM_SENSORS,
     CONF_ENABLE_STA_SENSORS,
     CONF_ENABLE_SYSTEM_SENSORS,
@@ -48,6 +49,7 @@ from .const import (
     CONF_TRACKING_METHOD,
     DEFAULT_DHCP_SOFTWARE,
     DEFAULT_WIRELESS_SOFTWARE,
+    DEFAULT_USE_HTTPS,
     DEFAULT_ENABLE_QMODEM_SENSORS,
     DEFAULT_ENABLE_STA_SENSORS,
     DEFAULT_ENABLE_SYSTEM_SENSORS,
@@ -69,6 +71,7 @@ from .const import (
     TRACKING_METHODS,
     API_SUBSYS_RC,
     API_METHOD_LIST,
+    build_ubus_url,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -78,6 +81,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Optional(CONF_IP_ADDRESS): str,
+        vol.Optional(CONF_USE_HTTPS, default=DEFAULT_USE_HTTPS): bool,
         vol.Optional(CONF_VERIFY_SSL, default=False): bool,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
@@ -151,10 +155,11 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
 
 def create_ubus_from_config(hass: HomeAssistant, data: dict) -> Ubus:
-    session = async_get_clientsession(hass)
+    session = async_get_clientsession(hass, verify_ssl=data.get(CONF_VERIFY_SSL, False))
     hostname = data[CONF_HOST]
     ip = data.get(CONF_IP_ADDRESS, None)
-    url = f"http://{ip if ip else hostname}/ubus"
+    use_https = data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)
+    url = build_ubus_url(hostname, use_https, ip)
     return Ubus(
         url,
         hostname,
@@ -341,6 +346,7 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         current_data = self.config_entry.data
         options_schema = vol.Schema(
             {
+                vol.Optional(CONF_USE_HTTPS, default=current_data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)): bool,
                 vol.Optional(CONF_VERIFY_SSL, default=current_data.get(CONF_VERIFY_SSL, False)): bool,
                 vol.Optional(
                     CONF_WIRELESS_SOFTWARE,

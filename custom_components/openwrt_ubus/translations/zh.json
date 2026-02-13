@@ -7,6 +7,7 @@
         "data": {
           "host": "主机地址",
           "ip_address": "IP 地址",
+          "use_https": "使用 HTTPS",
           "verify_ssl": "验证 SSL 证书",
           "username": "用户名",
           "password": "密码",
@@ -62,6 +63,7 @@
         "title": "OpenWrt ubus 配置",
         "description": "配置 {host} 的传感器、超时时间和软件设置",
         "data": {
+          "use_https": "使用 HTTPS",
           "verify_ssl": "验证 SSL 证书",
           "wireless_software": "无线软件",
           "dhcp_software": "DHCP 软件",

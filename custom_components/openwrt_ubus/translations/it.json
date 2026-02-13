@@ -7,6 +7,7 @@
         "data": {
           "host": "Host",
           "ip_address": "Indirizzo IP",
+          "use_https": "Usa HTTPS",
           "verify_ssl": "Verifica Certificato SSL",
           "username": "Utente",
           "password": "Password",
@@ -64,6 +65,7 @@
         "title": "Configura l'Integrazione OpenWrt ubus",
         "description": "Configura i tipi di sensore, gli intervalli di aggiornamento e altre opzioni per il tuo dispositivo OpenWrt",
         "data": {
+          "use_https": "Usa HTTPS",
           "verify_ssl": "Verifica Certificato SSL",
           "wireless_software": "Software Wireless",
           "dhcp_software": "Software DHCP",
