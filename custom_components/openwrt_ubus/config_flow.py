@@ -88,8 +88,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_IP_ADDRESS): str,
         vol.Optional(CONF_USE_HTTPS, default=DEFAULT_USE_HTTPS): bool,
         vol.Optional(CONF_PORT): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
-        vol.Optional(CONF_ENDPOINT, default=DEFAULT_ENDPOINT): str,
         vol.Optional(CONF_VERIFY_SSL, default=False): bool,
+        vol.Optional(CONF_ENDPOINT, default=DEFAULT_ENDPOINT): str,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
         vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(WIRELESS_SOFTWARES),
@@ -358,13 +358,13 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                 vol.Optional(CONF_USE_HTTPS, default=current_data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)): bool,
                 vol.Optional(
                     CONF_PORT,
-                    default=current_data.get(CONF_PORT),
-                ): vol.Any(None, vol.All(vol.Coerce(int), vol.Range(min=1, max=65535))),
+                    description={"suggested_value": current_data.get(CONF_PORT)},
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+                vol.Optional(CONF_VERIFY_SSL, default=current_data.get(CONF_VERIFY_SSL, False)): bool,
                 vol.Optional(
                     CONF_ENDPOINT,
                     default=current_data.get(CONF_ENDPOINT, DEFAULT_ENDPOINT),
                 ): str,
-                vol.Optional(CONF_VERIFY_SSL, default=current_data.get(CONF_VERIFY_SSL, False)): bool,
                 vol.Optional(
                     CONF_WIRELESS_SOFTWARE,
                     default=current_data.get(CONF_WIRELESS_SOFTWARE, DEFAULT_WIRELESS_SOFTWARE),

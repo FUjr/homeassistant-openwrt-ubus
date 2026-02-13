@@ -101,6 +101,16 @@ API_METHOD_SET = "set"
 API_METHOD_COMMIT = "commit"
 
 
+def _build_host_port(target: str, use_https: bool, port: int | None) -> str:
+    """Build host:port string, omitting port if it's the default."""
+    if port is None:
+        return target
+    default_port = DEFAULT_PORT_HTTPS if use_https else DEFAULT_PORT_HTTP
+    if port == default_port:
+        return target
+    return f"{target}:{port}"
+
+
 def build_ubus_url(
     host: str,
     use_https: bool = False,
@@ -108,27 +118,16 @@ def build_ubus_url(
     port: int | None = None,
     endpoint: str | None = None,
 ) -> str:
-    """Build the ubus URL based on protocol, host, port, and endpoint."""
+    """Build the ubus URL based on protocol, host, port and endpoint."""
     scheme = "https" if use_https else "http"
     target = ip_address if ip_address else host
-    default_port = DEFAULT_PORT_HTTPS if use_https else DEFAULT_PORT_HTTP
-    actual_port = port if port is not None else default_port
+    host_port = _build_host_port(target, use_https, port)
     ep = endpoint.strip("/") if endpoint else DEFAULT_ENDPOINT
-    # Omit port if it's the default for the scheme
-    if actual_port == default_port:
-        return f"{scheme}://{target}/{ep}"
-    return f"{scheme}://{target}:{actual_port}/{ep}"
+    return f"{scheme}://{host_port}/{ep}"
 
 
-def build_configuration_url(
-    host: str,
-    use_https: bool = False,
-    port: int | None = None,
-) -> str:
+def build_configuration_url(host: str, use_https: bool = False, port: int | None = None) -> str:
     """Build the configuration URL for device info."""
     scheme = "https" if use_https else "http"
-    default_port = DEFAULT_PORT_HTTPS if use_https else DEFAULT_PORT_HTTP
-    actual_port = port if port is not None else default_port
-    if actual_port == default_port:
-        return f"{scheme}://{host}"
-    return f"{scheme}://{host}:{actual_port}"
+    host_port = _build_host_port(host, use_https, port)
+    return f"{scheme}://{host_port}"
