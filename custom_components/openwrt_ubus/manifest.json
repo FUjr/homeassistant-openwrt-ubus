@@ -11,5 +11,5 @@
   "issue_tracker": "https://github.com/fujr/homeassistant-openwrt-ubus/issues",
   "loggers": ["openwrt_ubus"],
   "requirements": ["aiohttp>=3.0.0"],
-  "version": "0.0.7"
+  "version": "0.0.8"
 }
