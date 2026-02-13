@@ -21,7 +21,6 @@ from .const import (
     API_SUBSYS_RC,
     API_SUBSYS_WIRELESS,
     API_METHOD_BOARD,
-    API_METHOD_EXEC,
     API_METHOD_GET,
     API_METHOD_GET_AP,
     API_METHOD_GET_CLIENTS,
@@ -90,42 +89,6 @@ class ExtendedUbus(Ubus):
             API_METHOD_READ,
             {API_PARAM_PATH: path},
         )
-
-    async def file_exec(
-        self, command: str, params: list[str] | None = None, env: dict | None = None
-    ) -> dict:
-        """Execute a command."""
-        args = {"command": command}
-        if params:
-            args["params"] = params
-        if env:
-            args["env"] = env
-
-        return await self.api_call(
-            API_RPC_CALL,
-            API_SUBSYS_FILE,
-            API_METHOD_EXEC,
-            args,
-        )
-
-    async def get_ip_neighbors(self, ipv6: bool = False) -> list[str]:
-        """Get IP neighbors using ip command."""
-        command = "/sbin/ip"
-        params = ["-6", "neigh", "show"] if ipv6 else ["-4", "neigh", "show"]
-
-        try:
-            result = await self.file_exec(command, params)
-            if (
-                result
-                and isinstance(result, dict)
-                and result.get("code") == 0
-                and "stdout" in result
-            ):
-                return result["stdout"].splitlines()
-        except Exception as exc:
-            _LOGGER.debug("Failed to execute ip neigh: %s", exc)
-
-        return []
 
     # --- ETH SENSOR DEBUG/ERROR LOGGING PATCH ---
 
