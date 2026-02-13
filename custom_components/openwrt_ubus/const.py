@@ -7,6 +7,8 @@ PLATFORMS = [Platform.DEVICE_TRACKER, Platform.SENSOR, Platform.SWITCH, Platform
 
 # Configuration constants
 CONF_USE_HTTPS = "use_https"
+CONF_PORT = "port"
+CONF_ENDPOINT = "endpoint"
 CONF_DHCP_SOFTWARE = "dhcp_software"
 CONF_WIRELESS_SOFTWARE = "wireless_software"
 DEFAULT_DHCP_SOFTWARE = "dnsmasq"
@@ -38,6 +40,9 @@ CONF_SERVICE_TIMEOUT = "service_timeout"
 
 # Default values
 DEFAULT_USE_HTTPS = False
+DEFAULT_PORT_HTTP = 80
+DEFAULT_PORT_HTTPS = 443
+DEFAULT_ENDPOINT = "ubus"
 DEFAULT_ENABLE_QMODEM_SENSORS = True
 DEFAULT_ENABLE_STA_SENSORS = True
 DEFAULT_ENABLE_SYSTEM_SENSORS = True
@@ -96,14 +101,34 @@ API_METHOD_SET = "set"
 API_METHOD_COMMIT = "commit"
 
 
-def build_ubus_url(host: str, use_https: bool = False, ip_address: str | None = None) -> str:
-    """Build the ubus URL based on protocol and host."""
+def build_ubus_url(
+    host: str,
+    use_https: bool = False,
+    ip_address: str | None = None,
+    port: int | None = None,
+    endpoint: str | None = None,
+) -> str:
+    """Build the ubus URL based on protocol, host, port, and endpoint."""
     scheme = "https" if use_https else "http"
     target = ip_address if ip_address else host
-    return f"{scheme}://{target}/ubus"
+    default_port = DEFAULT_PORT_HTTPS if use_https else DEFAULT_PORT_HTTP
+    actual_port = port if port is not None else default_port
+    ep = endpoint.strip("/") if endpoint else DEFAULT_ENDPOINT
+    # Omit port if it's the default for the scheme
+    if actual_port == default_port:
+        return f"{scheme}://{target}/{ep}"
+    return f"{scheme}://{target}:{actual_port}/{ep}"
 
 
-def build_configuration_url(host: str, use_https: bool = False) -> str:
+def build_configuration_url(
+    host: str,
+    use_https: bool = False,
+    port: int | None = None,
+) -> str:
     """Build the configuration URL for device info."""
     scheme = "https" if use_https else "http"
-    return f"{scheme}://{host}"
+    default_port = DEFAULT_PORT_HTTPS if use_https else DEFAULT_PORT_HTTP
+    actual_port = port if port is not None else default_port
+    if actual_port == default_port:
+        return f"{scheme}://{host}"
+    return f"{scheme}://{host}:{actual_port}"

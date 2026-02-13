@@ -36,7 +36,10 @@ from homeassistant.helpers.update_coordinator import (
 from ..const import (
     DOMAIN,
     CONF_USE_HTTPS,
+    CONF_PORT,
+    CONF_ENDPOINT,
     DEFAULT_USE_HTTPS,
+    DEFAULT_ENDPOINT,
     CONF_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
     build_ubus_url,
@@ -284,7 +287,9 @@ class SystemInfoCoordinator(DataUpdateCoordinator):
         session = async_get_clientsession(hass)
 
         use_https = entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)
-        self.url = build_ubus_url(self.host, use_https)
+        port = entry.data.get(CONF_PORT)
+        endpoint = entry.data.get(CONF_ENDPOINT, DEFAULT_ENDPOINT)
+        self.url = build_ubus_url(self.host, use_https, port=port, endpoint=endpoint)
 
 
 class SystemInfoSensor(CoordinatorEntity, SensorEntity):
@@ -327,6 +332,7 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
             configuration_url=build_configuration_url(
                 self._host,
                 self.coordinator.data_manager.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS),
+                self.coordinator.data_manager.entry.data.get(CONF_PORT),
             ),
             sw_version=board_system,  # Use system info as software version
         )

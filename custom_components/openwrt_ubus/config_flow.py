@@ -31,6 +31,8 @@ from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
     CONF_USE_HTTPS,
+    CONF_PORT,
+    CONF_ENDPOINT,
     CONF_ENABLE_QMODEM_SENSORS,
     CONF_ENABLE_STA_SENSORS,
     CONF_ENABLE_SYSTEM_SENSORS,
@@ -50,6 +52,9 @@ from .const import (
     DEFAULT_DHCP_SOFTWARE,
     DEFAULT_WIRELESS_SOFTWARE,
     DEFAULT_USE_HTTPS,
+    DEFAULT_PORT_HTTP,
+    DEFAULT_PORT_HTTPS,
+    DEFAULT_ENDPOINT,
     DEFAULT_ENABLE_QMODEM_SENSORS,
     DEFAULT_ENABLE_STA_SENSORS,
     DEFAULT_ENABLE_SYSTEM_SENSORS,
@@ -82,6 +87,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_HOST): str,
         vol.Optional(CONF_IP_ADDRESS): str,
         vol.Optional(CONF_USE_HTTPS, default=DEFAULT_USE_HTTPS): bool,
+        vol.Optional(CONF_PORT): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+        vol.Optional(CONF_ENDPOINT, default=DEFAULT_ENDPOINT): str,
         vol.Optional(CONF_VERIFY_SSL, default=False): bool,
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
@@ -159,7 +166,9 @@ def create_ubus_from_config(hass: HomeAssistant, data: dict) -> Ubus:
     hostname = data[CONF_HOST]
     ip = data.get(CONF_IP_ADDRESS, None)
     use_https = data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)
-    url = build_ubus_url(hostname, use_https, ip)
+    port = data.get(CONF_PORT)
+    endpoint = data.get(CONF_ENDPOINT, DEFAULT_ENDPOINT)
+    url = build_ubus_url(hostname, use_https, ip, port, endpoint)
     return Ubus(
         url,
         hostname,
@@ -347,6 +356,14 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         options_schema = vol.Schema(
             {
                 vol.Optional(CONF_USE_HTTPS, default=current_data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)): bool,
+                vol.Optional(
+                    CONF_PORT,
+                    default=current_data.get(CONF_PORT),
+                ): vol.Any(None, vol.All(vol.Coerce(int), vol.Range(min=1, max=65535))),
+                vol.Optional(
+                    CONF_ENDPOINT,
+                    default=current_data.get(CONF_ENDPOINT, DEFAULT_ENDPOINT),
+                ): str,
                 vol.Optional(CONF_VERIFY_SSL, default=current_data.get(CONF_VERIFY_SSL, False)): bool,
                 vol.Optional(
                     CONF_WIRELESS_SOFTWARE,

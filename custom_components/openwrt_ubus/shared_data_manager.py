@@ -24,6 +24,8 @@ from .const import (
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
     CONF_USE_HTTPS,
+    CONF_PORT,
+    CONF_ENDPOINT,
     CONF_SYSTEM_SENSOR_TIMEOUT,
     CONF_QMODEM_SENSOR_TIMEOUT,
     CONF_STA_SENSOR_TIMEOUT,
@@ -34,6 +36,7 @@ from .const import (
     DEFAULT_DHCP_SOFTWARE,
     DEFAULT_WIRELESS_SOFTWARE,
     DEFAULT_USE_HTTPS,
+    DEFAULT_ENDPOINT,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
     DEFAULT_STA_SENSOR_TIMEOUT,
@@ -125,7 +128,9 @@ class SharedUbusDataManager:
             hostname = self.entry.data[CONF_HOST]
             ip = self.entry.data.get(CONF_IP_ADDRESS, None)
             use_https = self.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS)
-            url = build_ubus_url(hostname, use_https, ip)
+            port = self.entry.data.get(CONF_PORT)
+            endpoint = self.entry.data.get(CONF_ENDPOINT, DEFAULT_ENDPOINT)
+            url = build_ubus_url(hostname, use_https, ip, port, endpoint)
             username = self.entry.data[CONF_USERNAME]
             password = self.entry.data[CONF_PASSWORD]
 

@@ -8,6 +8,8 @@
           "host": "Host",
           "ip_address": "IP Address",
           "use_https": "Use HTTPS",
+          "port": "Port",
+          "endpoint": "API Endpoint",
           "verify_ssl": "Verify SSL Certificate",
           "username": "Username",
           "password": "Password",
@@ -68,6 +70,8 @@
         "description": "Configure sensor types, timeouts, and other options for your OpenWrt device",
         "data": {
           "use_https": "Use HTTPS",
+          "port": "Port",
+          "endpoint": "API Endpoint",
           "verify_ssl": "Verify SSL Certificate",
           "wireless_software": "Wireless Software",
           "dhcp_software": "DHCP Software",
