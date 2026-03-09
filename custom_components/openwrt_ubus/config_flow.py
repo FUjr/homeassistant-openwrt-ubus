@@ -71,6 +71,8 @@ from .const import (
     DEFAULT_WIRED_TRACKER_NAME_PRIORITY,
     DEFAULT_WIRED_TRACKER_WHITELIST,
     DEFAULT_WIRED_TRACKER_INTERFACES,
+    CONF_CONSIDER_HOME,
+    DEFAULT_CONSIDER_HOME,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
     DEFAULT_QMODEM_SENSOR_TIMEOUT,
     DEFAULT_STA_SENSOR_TIMEOUT,
@@ -534,6 +536,10 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                     CONF_MWAN3_SENSOR_TIMEOUT,
                     default=current_data.get(CONF_MWAN3_SENSOR_TIMEOUT, DEFAULT_MWAN3_SENSOR_TIMEOUT),
                 ): vol.All(vol.Coerce(int), vol.Range(min=30, max=600)),
+                vol.Optional(
+                    CONF_CONSIDER_HOME,
+                    default=current_data.get(CONF_CONSIDER_HOME, DEFAULT_CONSIDER_HOME),
+                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=1800)),
                 vol.Optional("refresh_services", default=False): bool,
             }
         )

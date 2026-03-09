@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import voluptuous as vol
@@ -29,10 +29,12 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .const import (
+    CONF_CONSIDER_HOME,
     CONF_DHCP_SOFTWARE,
     CONF_WIRELESS_SOFTWARE,
     CONF_TRACKING_METHOD,
     CONF_ENABLE_WIRED_TRACKER,
+    DEFAULT_CONSIDER_HOME,
     DEFAULT_DHCP_SOFTWARE,
     DEFAULT_WIRELESS_SOFTWARE,
     DEFAULT_TRACKING_METHOD,
@@ -457,6 +459,11 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
         self._attr_unique_id = _generate_unique_id(self._host, mac_address, self._tracking_method)
         self._attr_name = None  # Will be set dynamically
         self._attr_entity_registry_enabled_default = True  # Enable by default
+        self._last_seen: datetime | None = None
+        consider_home_seconds = coordinator.data_manager.entry.data.get(
+            CONF_CONSIDER_HOME, DEFAULT_CONSIDER_HOME
+        )
+        self._consider_home = timedelta(seconds=consider_home_seconds)
 
     def _get_device_data_from_any_coordinator(self) -> tuple[dict | None, str | None]:
         """Get device data from any coordinator (for uniqueid tracking method).
@@ -465,11 +472,19 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
             Tuple of (device_data, coordinator_host) or (None, None) if not found
         """
         # First try the local coordinator (most likely case)
+        # Check WiFi devices (device_statistics)
         device_stats = self.coordinator.data.get("device_statistics", {})
         device_data = device_stats.get(self.mac_address) or device_stats.get(self.mac_address.upper())
 
         if device_data and device_data.get("connected"):
             return device_data, self._host
+
+        # Check wired devices
+        wired_devices = self.coordinator.data.get("wired_devices", {})
+        wired_data = wired_devices.get(self.mac_address) or wired_devices.get(self.mac_address.upper())
+
+        if wired_data and wired_data.get("connected"):
+            return wired_data, self._host
 
         # If not found locally and tracking method is uniqueid, search in all coordinators
         if self._tracking_method == "uniqueid":
@@ -485,12 +500,11 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
                 if not other_coordinator.data:
                     continue
 
-                # Look for device in this coordinator's data
+                # Look for device in this coordinator's WiFi data
                 other_stats = other_coordinator.data.get("device_statistics", {})
                 device_data = other_stats.get(self.mac_address) or other_stats.get(self.mac_address.upper())
 
                 if device_data and device_data.get("connected"):
-                    # Found on another router
                     other_host = other_coordinator.data_manager.entry.data[CONF_HOST]
                     _LOGGER.debug(
                         "Device %s found on router %s (not on %s)",
@@ -499,6 +513,20 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
                         self._host,
                     )
                     return device_data, other_host
+
+                # Look for device in this coordinator's wired data
+                other_wired = other_coordinator.data.get("wired_devices", {})
+                wired_data = other_wired.get(self.mac_address) or other_wired.get(self.mac_address.upper())
+
+                if wired_data and wired_data.get("connected"):
+                    other_host = other_coordinator.data_manager.entry.data[CONF_HOST]
+                    _LOGGER.debug(
+                        "Device %s found in wired devices on router %s (not on %s)",
+                        self.mac_address,
+                        other_host,
+                        self._host,
+                    )
+                    return wired_data, other_host
 
         # Not found anywhere
         return None, None
@@ -635,6 +663,17 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
 
         return self._attr_mac_address.replace(":", "")
 
+    def _check_consider_home(self, connected: bool) -> bool:
+        """Apply consider_home logic: keep device home for a grace period."""
+        now = datetime.now()
+        if connected:
+            self._last_seen = now
+            return True
+        # Not currently seen, check if within consider_home window
+        if self._last_seen and (now - self._last_seen) < self._consider_home:
+            return True
+        return False
+
     @property
     def is_connected(self) -> bool:
         """Return true if the device is connected to the network."""
@@ -654,25 +693,25 @@ class OpenwrtDeviceTracker(CoordinatorEntity, ScannerEntity):
                     )
                 else:
                     _LOGGER.debug("Device %s connection status: %s", self.mac_address, connected)
-                return connected
+                return self._check_consider_home(connected)
 
             _LOGGER.debug(
                 "Device %s not found in any device statistics, assuming disconnected",
                 self.mac_address,
             )
-            return False
+            return self._check_consider_home(False)
 
         # For combined tracking, use simplified logic from main
         if device_data := self._device_data():
             connected = device_data.get("connected", False)
             _LOGGER.debug("Device %s connection status: %s", self._attr_mac_address, connected)
-            return connected
+            return self._check_consider_home(connected)
 
         _LOGGER.debug(
             "Device %s not found in device statistics, assuming disconnected",
             self._attr_mac_address,
         )
-        return False
+        return self._check_consider_home(False)
 
     @property
     def extra_state_attributes(self) -> dict[str, str]:

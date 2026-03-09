@@ -73,6 +73,10 @@ DEFAULT_WIRED_TRACKER_NAME_PRIORITY = "ipv4"  # Options: ipv4, ipv6, mac
 DEFAULT_WIRED_TRACKER_WHITELIST = []  # Empty list means no filtering
 DEFAULT_WIRED_TRACKER_INTERFACES = []  # Empty list means no interface filtering
 
+# Consider home configuration
+CONF_CONSIDER_HOME = "consider_home"
+DEFAULT_CONSIDER_HOME = 300  # seconds before marking device as not_home
+
 # API constants - moved from Ubus/const.py
 API_RPC_CALL = "call"
 API_RPC_LIST = "list"
