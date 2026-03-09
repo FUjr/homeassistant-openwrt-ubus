@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Shared data manager for OpenWrt ubus API calls to reduce router load."""
 
 from __future__ import annotations
@@ -294,7 +295,7 @@ class SharedUbusDataManager:
         return self._interface_to_ssid
 
     async def _fetch_device_statistics(self) -> Dict[str, Any]:
-        """Fetch device statistics from wireless interfaces."""
+        """Fetch device statistics from wireless interfaces and merge wired devices from network.device."""
         wireless_software = self.entry.data.get(CONF_WIRELESS_SOFTWARE, "iwinfo")
         dhcp_software = self.entry.data.get(CONF_DHCP_SOFTWARE, "dnsmasq")
 
@@ -305,13 +306,89 @@ class SharedUbusDataManager:
             # Get interface to SSID mapping
             interface_to_ssid = await self._get_interface_to_ssid_mapping()
 
-            # Get device statistics and connection info
+            # Get device statistics and connection info for wireless
             if wireless_software == "hostapd":
-                return await self._fetch_hostapd_data(mac2name, interface_to_ssid)
+                base_result = await self._fetch_hostapd_data(mac2name, interface_to_ssid)
             elif wireless_software == "iwinfo":
-                return await self._fetch_iwinfo_data(mac2name, interface_to_ssid)
+                base_result = await self._fetch_iwinfo_data(mac2name, interface_to_ssid)
             else:
-                return {}
+                base_result = {}
+
+            # Normalize base result
+            if isinstance(base_result, dict):
+                device_statistics = base_result.get("device_statistics", {}) or {}
+                ap_interface_mapping = base_result.get("ap_interface_mapping", {}) or {}
+            else:
+                device_statistics = {}
+                ap_interface_mapping = {}
+
+            # --- Now fetch network.device info and merge wired clients ---
+            try:
+                network_data = await self._fetch_network_devices()
+                network_devices = {}
+                if isinstance(network_data, dict):
+                    network_devices = network_data.get("network_devices", {}) or {}
+
+                if network_devices:
+                    _LOGGER.debug("Merging %d network.device entries into device statistics", len(network_devices))
+                else:
+                    _LOGGER.debug("No network.device entries found or empty response")
+
+                for dev_name, dev_info in network_devices.items():
+                    # dev_info can be dict or have nested structure depending on OpenWrt version
+                    if not isinstance(dev_info, dict):
+                        _LOGGER.debug("Skipping network device %s with unexpected info type: %s", dev_name, type(dev_info))
+                        continue
+
+                    # Possible mac field names: 'macaddr', 'mac', 'hwaddr'
+                    raw_mac = dev_info.get("macaddr") or dev_info.get("mac") or dev_info.get("hwaddr")
+                    if not raw_mac:
+                        # Some devices (e.g., bridge interface) might not have mac - skip
+                        continue
+
+                    normalized_mac = raw_mac.upper()
+
+                    # Skip if already present (wireless client)
+                    if normalized_mac in device_statistics:
+                        continue
+
+                    # Determine connected state - handle different field names
+                    operstate = dev_info.get("operstate") or dev_info.get("status") or ""
+                    link = dev_info.get("link") if "link" in dev_info else None
+
+                    connected = False
+                    if isinstance(link, bool):
+                        connected = link
+                    else:
+                        # Interpret operstate strings
+                        connected = str(operstate).lower() in ("up", "ready", "running")
+
+                    # Get hostname/IP from mac2name mapping if available
+                    hostname_data = mac2name.get(normalized_mac, {})
+                    hostname = hostname_data.get("hostname", normalized_mac.replace(":", ""))
+                    ip_address = hostname_data.get("ip", "Unknown IP")
+
+                    # Build device info entry consistent with wireless entries
+                    device_info = {
+                        "mac": normalized_mac,
+                        "hostname": hostname,
+                        "ap_device": dev_name,       # physical interface name (e.g., eth0, br-lan)
+                        "ap_ssid": "",               # not applicable for wired devices
+                        "connected": bool(connected),
+                        "connection_type": "wired",
+                        "ip_address": ip_address,
+                    }
+
+                    # Insert into device_statistics
+                    device_statistics[normalized_mac] = device_info
+
+            except Exception as exc:
+                _LOGGER.debug("Error merging network.device data: %s", exc)
+
+            return {
+                "device_statistics": device_statistics,
+                "ap_interface_mapping": ap_interface_mapping,
+            }
         except Exception as exc:
             _LOGGER.error("Error fetching device statistics: %s", exc)
             raise UpdateFailed(f"Error fetching device statistics: {exc}")
