@@ -32,6 +32,7 @@ from .const import (
     API_METHOD_DEL_CLIENT,
     API_METHOD_LIST,
     API_METHOD_INIT,
+    API_METHOD_REBOOT,
     API_METHOD_SET,
     API_METHOD_COMMIT,
 )
@@ -355,6 +356,10 @@ class ExtendedUbus(Ubus):
     async def system_stat(self):
         """Kernel system statistics."""
         return await self.file_read("/proc/stat")
+
+    async def system_reboot(self):
+        """Trigger a system reboot."""
+        return await self.api_call(API_RPC_CALL, API_SUBSYS_SYSTEM, API_METHOD_REBOOT, {})
 
     # iwinfo specific methods
     async def get_ap_devices(self):
