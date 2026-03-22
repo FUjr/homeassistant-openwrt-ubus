@@ -5,6 +5,7 @@ import logging
 from .Ubus import Ubus
 from .Ubus.interface import PreparedCall
 from .const import (
+    API_METHOD_EXEC,
     API_RPC_CALL,
     API_RPC_LIST,
     API_PARAM_CONFIG,
@@ -88,6 +89,18 @@ class ExtendedUbus(Ubus):
             API_SUBSYS_FILE,
             API_METHOD_READ,
             {API_PARAM_PATH: path},
+        )
+    
+    async def file_exec(self, command, params=None):
+        """Execute a command through ubus file.exec."""
+        return await self.api_call(
+            API_RPC_CALL,
+            API_SUBSYS_FILE,
+            API_METHOD_EXEC,
+            {
+                "command": command,
+                "params": params or [],
+            },
         )
 
     # --- ETH SENSOR DEBUG/ERROR LOGGING PATCH ---
@@ -355,6 +368,8 @@ class ExtendedUbus(Ubus):
     async def system_stat(self):
         """Kernel system statistics."""
         return await self.file_read("/proc/stat")
+    
+
 
     # iwinfo specific methods
     async def get_ap_devices(self):
