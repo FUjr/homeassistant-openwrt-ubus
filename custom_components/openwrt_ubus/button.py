@@ -12,10 +12,12 @@ from .const import (
     DOMAIN,
     CONF_ENABLE_SERVICE_CONTROLS,
     CONF_ENABLE_DEVICE_KICK_BUTTONS,
+    CONF_ENABLE_REBOOT_BUTTON,
     DEFAULT_ENABLE_SERVICE_CONTROLS,
     DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
+    DEFAULT_ENABLE_REBOOT_BUTTON,
 )
-from .buttons import service_button, device_kick_button
+from .buttons import service_button, device_kick_button, reboot_button
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,6 +34,12 @@ BUTTON_MODULES = [
         "config_key": CONF_ENABLE_DEVICE_KICK_BUTTONS,
         "default": DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
         "name": "device_kick_button",
+    },
+    {
+        "module": reboot_button,
+        "config_key": CONF_ENABLE_REBOOT_BUTTON,
+        "default": DEFAULT_ENABLE_REBOOT_BUTTON,
+        "name": "reboot_button",
     },
 ]
 
