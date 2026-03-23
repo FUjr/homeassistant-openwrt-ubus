@@ -26,6 +26,7 @@ CONF_ENABLE_AP_SENSORS = "enable_ap_sensors"
 CONF_ENABLE_ETH_SENSORS = "enable_eth_sensors"
 CONF_ENABLE_MWAN3_SENSORS = "enable_mwan3_sensors"
 CONF_ENABLE_SERVICE_CONTROLS = "enable_service_controls"
+CONF_ENABLE_NLBWMON_SENSORS = "enable_nlbwmon_sensors"
 
 CONF_ENABLE_DEVICE_KICK_BUTTONS = "enable_device_kick_buttons"
 CONF_SELECTED_SERVICES = "selected_services"
@@ -57,6 +58,7 @@ DEFAULT_ENABLE_ETH_SENSORS = True
 DEFAULT_ENABLE_MWAN3_SENSORS = True
 DEFAULT_ENABLE_SERVICE_CONTROLS = False
 DEFAULT_TRACKING_METHOD = "combined"
+DEFAULT_ENABLE_NLBWMON_SENSORS = True
 
 DEFAULT_ENABLE_DEVICE_KICK_BUTTONS = False
 DEFAULT_SELECTED_SERVICES = []
@@ -114,6 +116,7 @@ API_METHOD_LIST = "list"
 API_METHOD_INIT = "init"
 API_METHOD_SET = "set"
 API_METHOD_COMMIT = "commit"
+API_METHOD_EXEC = "exec"
 
 
 def _build_host_port(target: str, use_https: bool, port: int | None) -> str:
