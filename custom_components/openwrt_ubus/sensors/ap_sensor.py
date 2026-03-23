@@ -255,6 +255,14 @@ SENSOR_DESCRIPTIONS = [
         icon="mdi:flag",
         entity_category=None,
     ),
+    SensorEntityDescription(
+        key="clients",
+        name="Connected Clients",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="clients",
+        icon="mdi:account-network",
+        entity_category=None,
+    ),
 ]
 
 
@@ -280,7 +288,7 @@ async def async_setup_entry(
     coordinator = SharedDataUpdateCoordinator(
         hass,
         data_manager,
-        ["ap_info"],  # Data types this coordinator needs
+        ["ap_info", "device_statistics"],  # Data types this coordinator needs
         f"{DOMAIN}_ap_{entry.data[CONF_HOST]}",
         scan_interval,
     )
@@ -323,10 +331,14 @@ async def async_setup_entry(
                         continue
 
                     # Check if sensor has required data
-                    ap_data = ap_info_data.get(ap_device, {})
-                    mapping = SENSOR_VALUE_MAPPING.get(description.key)
-                    if mapping and _has_required_data(ap_data, mapping.data_keys):
+                    if description.key == "clients":
+                        # clients sensor doesn't need data from ap_info
                         device_sensors_to_add.append(description)
+                    else:
+                        ap_data = ap_info_data.get(ap_device, {})
+                        mapping = SENSOR_VALUE_MAPPING.get(description.key)
+                        if mapping and _has_required_data(ap_data, mapping.data_keys):
+                            device_sensors_to_add.append(description)
 
                 # Only add sensors that don't already exist and have data
                 if device_sensors_to_add:
@@ -382,9 +394,12 @@ async def async_setup_entry(
 
             # Only add sensors that have the required data
             for description in SENSOR_DESCRIPTIONS:
-                mapping = SENSOR_VALUE_MAPPING.get(description.key)
-                if mapping and _has_required_data(ap_data, mapping.data_keys):
+                if description.key == "clients":
                     initial_entities.append(ApSensor(coordinator, description, ap_device))
+                else:
+                    mapping = SENSOR_VALUE_MAPPING.get(description.key)
+                    if mapping and _has_required_data(ap_data, mapping.data_keys):
+                        initial_entities.append(ApSensor(coordinator, description, ap_device))
 
     # Add initial entities if any
     if initial_entities:
@@ -447,6 +462,13 @@ class ApSensor(CoordinatorEntity, SensorEntity):
     @property
     def available(self) -> bool:
         """Return True if entity is available."""
+        if self.entity_description.key == "clients":
+            return (
+                self.coordinator.last_update_success
+                and self.coordinator.data is not None
+                and "device_statistics" in self.coordinator.data
+            )
+
         if not (
             self.coordinator.last_update_success
             and self.coordinator.data is not None
@@ -467,7 +489,24 @@ class ApSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> str | int | float | None:
         """Return the state of the sensor."""
-        if not self.coordinator.data or "ap_info" not in self.coordinator.data:
+        if not self.coordinator.data:
+            return None
+
+        if self.entity_description.key == "clients":
+            if "device_statistics" not in self.coordinator.data:
+                return 0
+            count = 0
+            dev_stats = self.coordinator.data["device_statistics"]
+            for mac, info in dev_stats.items():
+                ap_dev = info.get("ap_device", "")
+                if ap_dev.startswith("hostapd."):
+                    ap_dev = ap_dev.replace("hostapd.", "", 1)
+                
+                if ap_dev == self.ap_device:
+                    count += 1
+            return count
+
+        if "ap_info" not in self.coordinator.data:
             return None
 
         ap_info_data = self.coordinator.data["ap_info"]
