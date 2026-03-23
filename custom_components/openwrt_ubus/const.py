@@ -36,6 +36,9 @@ CONF_ENABLE_WIRED_TRACKER = "enable_wired_tracker"
 CONF_WIRED_TRACKER_NAME_PRIORITY = "wired_tracker_name_priority"
 CONF_WIRED_TRACKER_WHITELIST = "wired_tracker_whitelist"
 CONF_WIRED_TRACKER_INTERFACES = "wired_tracker_interfaces"
+# Wireless device tracker configuration
+CONF_ENABLE_WIRELESS_TRACKERS = "enable_wireless_trackers"
+CONF_WIRELESS_TRACKER_WHITELIST = "wireless_tracker_whitelist"
 
 # Timeout configuration
 CONF_SYSTEM_SENSOR_TIMEOUT = "system_sensor_timeout"
@@ -74,6 +77,7 @@ DEFAULT_ENABLE_WIRED_TRACKER = False
 DEFAULT_WIRED_TRACKER_NAME_PRIORITY = "ipv4"  # Options: ipv4, ipv6, mac
 DEFAULT_WIRED_TRACKER_WHITELIST = []  # Empty list means no filtering
 DEFAULT_WIRED_TRACKER_INTERFACES = []  # Empty list means no interface filtering
+DEFAULT_ENABLE_WIRELESS_TRACKERS = False
 
 # Consider home configuration
 CONF_CONSIDER_HOME = "consider_home"

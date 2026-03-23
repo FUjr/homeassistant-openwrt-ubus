@@ -30,7 +30,15 @@
           "enable_mwan3_sensors": "Enable mwan3 Sensors (if mwan3 is installed)",
           "enable_service_controls": "Enable Service Controls",
           "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)",
+          "enable_wireless_trackers": "Enable Wireless Device Tracking",
           "enable_wired_tracker": "Enable Wired Device Tracking"
+        }
+      },
+      "wireless_tracker_config": {
+        "title": "OpenWrt ubus - Wireless Device Tracker Configuration",
+        "description": "Configure wireless device tracking filters for {host}. Leave the whitelist empty to track all connected WiFi devices.",
+        "data": {
+          "wireless_tracker_whitelist": "Whitelist (comma-separated IP/MAC prefixes)"
         }
       },
       "services": {
@@ -84,6 +92,8 @@
           "enable_mwan3_sensors": "Enable mwan3 Sensors (if mwan3 is installed)",
           "enable_service_controls": "Enable Service Controls",
           "enable_device_kick_buttons": "Enable Device Kick Buttons",
+          "enable_wireless_trackers": "Enable Wireless Device Tracking",
+          "wireless_tracker_whitelist": "Wireless Device Whitelist",
           "enable_wired_tracker": "Enable Wired Device Tracking",
           "wired_tracker_name_priority": "Wired Device Name Priority",
           "wired_tracker_whitelist": "Wired Device Whitelist",
