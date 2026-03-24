@@ -102,4 +102,3 @@ class OpenwrtServiceRestartButton(ButtonEntity):
 
         except Exception as exc:
             _LOGGER.error("Failed to restart service %s: %s", self.service_name, exc)
-            raise
