@@ -39,6 +39,9 @@ CONF_WIRED_TRACKER_INTERFACES = "wired_tracker_interfaces"
 # Wireless device tracker configuration
 CONF_ENABLE_WIRELESS_TRACKERS = "enable_wireless_trackers"
 CONF_WIRELESS_TRACKER_WHITELIST = "wireless_tracker_whitelist"
+# STA sensor selection
+CONF_SELECT_ALL_STA = "select_all_sta"
+CONF_SELECTED_STA = "selected_sta"
 
 # Timeout configuration
 CONF_SYSTEM_SENSOR_TIMEOUT = "system_sensor_timeout"
@@ -78,6 +81,8 @@ DEFAULT_WIRED_TRACKER_NAME_PRIORITY = "ipv4"  # Options: ipv4, ipv6, mac
 DEFAULT_WIRED_TRACKER_WHITELIST = []  # Empty list means no filtering
 DEFAULT_WIRED_TRACKER_INTERFACES = []  # Empty list means no interface filtering
 DEFAULT_ENABLE_WIRELESS_TRACKERS = False
+DEFAULT_SELECT_ALL_STA = False
+DEFAULT_SELECTED_STA = []  # Empty list means no devices selected (only matters when select_all_sta is False)
 
 # Consider home configuration
 CONF_CONSIDER_HOME = "consider_home"
