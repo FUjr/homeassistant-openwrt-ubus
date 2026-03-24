@@ -45,6 +45,8 @@ from .const import (
     CONF_WIRED_TRACKER_NAME_PRIORITY,
     CONF_WIRED_TRACKER_WHITELIST,
     CONF_WIRED_TRACKER_INTERFACES,
+    CONF_ENABLE_WIRELESS_TRACKERS,
+    CONF_WIRELESS_TRACKER_WHITELIST,
     CONF_SELECTED_SERVICES,
     CONF_SYSTEM_SENSOR_TIMEOUT,
     CONF_QMODEM_SENSOR_TIMEOUT,
@@ -71,6 +73,7 @@ from .const import (
     DEFAULT_WIRED_TRACKER_NAME_PRIORITY,
     DEFAULT_WIRED_TRACKER_WHITELIST,
     DEFAULT_WIRED_TRACKER_INTERFACES,
+    DEFAULT_ENABLE_WIRELESS_TRACKERS,
     CONF_CONSIDER_HOME,
     DEFAULT_CONSIDER_HOME,
     DEFAULT_SYSTEM_SENSOR_TIMEOUT,
@@ -119,6 +122,7 @@ STEP_SENSORS_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_ENABLE_MWAN3_SENSORS, default=DEFAULT_ENABLE_MWAN3_SENSORS): bool,
         vol.Optional(CONF_ENABLE_SERVICE_CONTROLS, default=DEFAULT_ENABLE_SERVICE_CONTROLS): bool,
         vol.Optional(CONF_ENABLE_DEVICE_KICK_BUTTONS, default=DEFAULT_ENABLE_DEVICE_KICK_BUTTONS): bool,
+        vol.Optional(CONF_ENABLE_WIRELESS_TRACKERS, default=DEFAULT_ENABLE_WIRELESS_TRACKERS): bool,
         vol.Optional(CONF_ENABLE_WIRED_TRACKER, default=DEFAULT_ENABLE_WIRED_TRACKER): bool,
     }
 )
@@ -262,6 +266,10 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._sensor_data = user_input
 
+            # If wireless tracker is enabled, proceed to wireless tracker configuration
+            if user_input.get(CONF_ENABLE_WIRELESS_TRACKERS, False):
+                return await self.async_step_wireless_tracker_config()
+
             # If wired tracker is enabled, proceed to wired tracker configuration
             if user_input.get(CONF_ENABLE_WIRED_TRACKER, False):
                 return await self.async_step_wired_tracker_config()
@@ -311,6 +319,46 @@ class OpenwrtUbusConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="wired_tracker_config",
             data_schema=wired_tracker_schema,
+            description_placeholders={"host": self._connection_data[CONF_HOST]},
+        )
+
+    async def async_step_wireless_tracker_config(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Handle the wireless tracker configuration step."""
+        if user_input is not None:
+            # Merge wireless tracker config into sensor data
+            self._sensor_data.update(user_input)
+
+            # Process whitelist from comma-separated string
+            if CONF_WIRELESS_TRACKER_WHITELIST in self._sensor_data:
+                whitelist_str = self._sensor_data[CONF_WIRELESS_TRACKER_WHITELIST]
+                if isinstance(whitelist_str, str):
+                    self._sensor_data[CONF_WIRELESS_TRACKER_WHITELIST] = [
+                        item.strip() for item in whitelist_str.split(",") if item.strip()
+                    ]
+
+            # If wired tracker is enabled, proceed to wired tracker configuration
+            if self._sensor_data.get(CONF_ENABLE_WIRED_TRACKER, False):
+                return await self.async_step_wired_tracker_config()
+
+            # If service controls are enabled, proceed to services selection
+            if self._sensor_data.get(CONF_ENABLE_SERVICE_CONTROLS, False):
+                return await self.async_step_services()
+
+            return await self.async_step_timeouts()
+
+        # Create schema for wireless tracker configuration
+        wireless_tracker_schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_WIRELESS_TRACKER_WHITELIST,
+                    default="",
+                ): cv.string,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="wireless_tracker_config",
+            data_schema=wireless_tracker_schema,
             description_placeholders={"host": self._connection_data[CONF_HOST]},
         )
 
@@ -405,7 +453,17 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
             if user_input.get("refresh_services", False):
                 return await self.async_step_services()
 
-            # Process whitelist string into list
+            # Process wireless tracker whitelist string into list
+            if CONF_WIRELESS_TRACKER_WHITELIST in user_input:
+                whitelist_str = user_input.get(CONF_WIRELESS_TRACKER_WHITELIST, "")
+                if whitelist_str:
+                    user_input[CONF_WIRELESS_TRACKER_WHITELIST] = [
+                        prefix.strip() for prefix in whitelist_str.split(",") if prefix.strip()
+                    ]
+                else:
+                    user_input[CONF_WIRELESS_TRACKER_WHITELIST] = []
+
+            # Process wired tracker whitelist string into list
             if CONF_WIRED_TRACKER_WHITELIST in user_input:
                 whitelist_str = user_input.get(CONF_WIRED_TRACKER_WHITELIST, "")
                 if whitelist_str:
@@ -500,10 +558,19 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                         DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
                     ),
                 ): bool,
-                vol.Optional(
-                    CONF_ENABLE_WIRED_TRACKER,
-                    default=current_data.get(CONF_ENABLE_WIRED_TRACKER, DEFAULT_ENABLE_WIRED_TRACKER),
-                ): bool,
+                 vol.Optional(
+                     CONF_ENABLE_WIRELESS_TRACKERS,
+                     default=current_data.get(CONF_ENABLE_WIRELESS_TRACKERS, DEFAULT_ENABLE_WIRELESS_TRACKERS),
+                 ): bool,
+                 vol.Optional(
+                     CONF_WIRELESS_TRACKER_WHITELIST,
+                     description={"suggested_value": ",".join(current_data.get(CONF_WIRELESS_TRACKER_WHITELIST, []))},
+                 ): str,
+                 vol.Optional(
+                     CONF_ENABLE_WIRED_TRACKER,
+                     default=current_data.get(CONF_ENABLE_WIRED_TRACKER, DEFAULT_ENABLE_WIRED_TRACKER),
+                 ): bool,
+
                 vol.Optional(
                     CONF_WIRED_TRACKER_NAME_PRIORITY,
                     default=current_data.get(CONF_WIRED_TRACKER_NAME_PRIORITY, DEFAULT_WIRED_TRACKER_NAME_PRIORITY),
