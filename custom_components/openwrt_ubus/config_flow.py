@@ -40,6 +40,7 @@ from .const import (
     CONF_ENABLE_AP_SENSORS,
     CONF_ENABLE_ETH_SENSORS,
     CONF_ENABLE_MWAN3_SENSORS,
+    CONF_ENABLE_NLBWMON_SENSORS,
     CONF_ENABLE_SERVICE_CONTROLS,
     CONF_ENABLE_DEVICE_KICK_BUTTONS,
     CONF_ENABLE_WIRED_TRACKER,
@@ -70,6 +71,7 @@ from .const import (
     DEFAULT_ENABLE_AP_SENSORS,
     DEFAULT_ENABLE_ETH_SENSORS,
     DEFAULT_ENABLE_MWAN3_SENSORS,
+    DEFAULT_ENABLE_NLBWMON_SENSORS,
     DEFAULT_ENABLE_SERVICE_CONTROLS,
     DEFAULT_ENABLE_DEVICE_KICK_BUTTONS,
     DEFAULT_ENABLE_WIRED_TRACKER,
@@ -125,6 +127,7 @@ STEP_SENSORS_DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_ENABLE_AP_SENSORS, default=DEFAULT_ENABLE_AP_SENSORS): bool,
         vol.Optional(CONF_ENABLE_ETH_SENSORS, default=DEFAULT_ENABLE_ETH_SENSORS): bool,
         vol.Optional(CONF_ENABLE_MWAN3_SENSORS, default=DEFAULT_ENABLE_MWAN3_SENSORS): bool,
+        vol.Optional(CONF_ENABLE_NLBWMON_SENSORS, default=DEFAULT_ENABLE_NLBWMON_SENSORS): bool,
         vol.Optional(CONF_ENABLE_SERVICE_CONTROLS, default=DEFAULT_ENABLE_SERVICE_CONTROLS): bool,
         vol.Optional(CONF_ENABLE_DEVICE_KICK_BUTTONS, default=DEFAULT_ENABLE_DEVICE_KICK_BUTTONS): bool,
         vol.Optional(CONF_ENABLE_WIRELESS_TRACKERS, default=DEFAULT_ENABLE_WIRELESS_TRACKERS): bool,
@@ -689,6 +692,10 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                 vol.Optional(
                     CONF_ENABLE_MWAN3_SENSORS,
                     default=current_data.get(CONF_ENABLE_MWAN3_SENSORS, DEFAULT_ENABLE_MWAN3_SENSORS),
+                ): bool,
+                vol.Optional(
+                    CONF_ENABLE_NLBWMON_SENSORS,
+                    default=current_data.get(CONF_ENABLE_NLBWMON_SENSORS, DEFAULT_ENABLE_NLBWMON_SENSORS),
                 ): bool,
                 vol.Optional(
                     CONF_ENABLE_SERVICE_CONTROLS,

@@ -19,6 +19,16 @@ The OpenWrt Ubus Integration is a comprehensive Home Assistant custom integratio
 
 This integration provides the following comprehensive features:
 
+## 🆕 Release Notes
+
+### v2.1 - NLBWMon Optional Toggle
+- Added a new config toggle: **Enable NLBWMon Top Hosts Sensor** in both initial setup and options flow.
+- New installations now default this toggle to **Disabled** to reduce recurring log errors on routers/APs that do not use `nlbwmon`.
+- Added startup capability probing so NLBWMon entities are skipped when `/usr/sbin/nlbw` or required ubus permissions are unavailable.
+- Existing installations keep legacy behavior unless you explicitly change the toggle.
+
+**Recommended setting for AP/non-router or minimal OpenWrt installs:** keep NLBWMon disabled unless `nlbwmon` is installed and ACL allows `file.exec` for `/usr/sbin/nlbw`.
+
 ### 1️⃣ AP Interface Management
 Monitor and manage OpenWrt access point (AP) interfaces with detailed status information:
 - **� AP Master Mode**: View hosted wireless networks with SSID, encryption, channel information, connected client counts, and bandwidth utilization
