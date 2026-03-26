@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import logging
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
@@ -17,6 +18,8 @@ from ..const import DOMAIN, CONF_PORT, CONF_USE_HTTPS, DEFAULT_USE_HTTPS, build_
 from ..shared_data_manager import SharedDataUpdateCoordinator
 
 SCAN_INTERVAL = timedelta(seconds=60)
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _format_bytes(num_bytes: int) -> str:
@@ -42,8 +45,13 @@ async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
-) -> SharedDataUpdateCoordinator:
+) -> SharedDataUpdateCoordinator | None:
     """Set up OpenWrt nlbwmon sensors from a config entry."""
+    nlbwmon_available = hass.data.get(DOMAIN, {}).get("nlbwmon_available", False)
+    if not nlbwmon_available:
+        _LOGGER.info("NLBWMon entities not created - nlbwmon is not available or not permitted")
+        return None
+
     data_manager_key = f"data_manager_{entry.entry_id}"
     data_manager = hass.data[DOMAIN][data_manager_key]
 

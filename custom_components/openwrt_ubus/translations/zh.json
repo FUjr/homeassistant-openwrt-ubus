@@ -27,6 +27,7 @@
           "enable_ap_sensors": "启用接入点传感器",
           "enable_eth_sensors": "启用网络接口传感器",
           "enable_mwan3_sensors": "启用 mwan3 传感器（如果已安装 mwan3）",
+          "enable_nlbwmon_sensors": "启用 NLBWMon 高带宽主机传感器",
           "enable_service_controls": "启用服务控制",
           "enable_device_kick_buttons": "启用设备踢出按钮（需要hostapd）",
           "enable_wired_tracker": "启用有线设备跟踪"
@@ -80,6 +81,7 @@
           "enable_ap_sensors": "启用接入点传感器",
           "enable_eth_sensors": "启用网络接口传感器",
           "enable_mwan3_sensors": "启用 mwan3 传感器（如果已安装 mwan3）",
+          "enable_nlbwmon_sensors": "启用 NLBWMon 高带宽主机传感器",
           "enable_service_controls": "启用服务控制",
           "enable_device_kick_buttons": "启用设备踢出按钮",
           "enable_wired_tracker": "启用有线设备跟踪",
@@ -107,6 +109,7 @@
           "enable_sta_sensors": "监控已连接的 WiFi 设备及其统计信息",
           "enable_ap_sensors": "监控接入点接口信息（WiFi 网络详情）",
           "enable_eth_sensors": "监控网络接口统计信息",
+          "enable_nlbwmon_sensors": "使用 nlbwmon 监控带宽占用最高的主机（需要 /usr/sbin/nlbw 和 ubus file.exec 权限）",
           "enable_device_kick_buttons": "启用从接入点断开设备的按钮（需要 hostapd）",
           "enable_wired_tracker": "使用 IP 邻居表跟踪有线设备（过滤 WiFi 设备）",
           "wired_tracker_name_priority": "当找不到主机名时，使用 IPv4、IPv6 还是 MAC 地址作为设备名称",
