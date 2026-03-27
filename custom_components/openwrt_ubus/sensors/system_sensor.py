@@ -74,7 +74,6 @@ SENSOR_DESCRIPTIONS = [
         key="load_1",
         name="Load Average (1m)",
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="%",
         icon="mdi:speedometer",
         entity_category=None,
     ),
@@ -82,7 +81,6 @@ SENSOR_DESCRIPTIONS = [
         key="load_5",
         name="Load Average (5m)",
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="%",
         icon="mdi:speedometer",
         entity_category=None,
     ),
@@ -90,7 +88,6 @@ SENSOR_DESCRIPTIONS = [
         key="load_15",
         name="Load Average (15m)",
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="%",
         icon="mdi:speedometer",
         entity_category=None,
     ),
@@ -360,7 +357,7 @@ class SystemInfoSensor(CoordinatorEntity, SensorEntity):
             load = system_info.get("load", [])
             if isinstance(load, list) and len(load) >= 3:
                 load_map = {"load_1": 0, "load_5": 1, "load_15": 2}
-                return load[load_map[key]] / 1000 if key in load_map else None
+                return round(load[load_map[key]] / 65536.0, 2) if key in load_map else None
         elif key == "cpu_usage":
             system_stat = self.coordinator.data.get("system_stat", {}).get("data", "")
             cpu_data = next(
