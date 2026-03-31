@@ -795,14 +795,21 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
         if not self._available_services and not errors:
             errors["base"] = "no_services_found"
 
-        # Create multi-select schema for services
+        # Create multi-select schema for services.
+        # Include previously-saved services that are no longer on the router so
+        # the user can deselect them (avoids "not a valid option" errors).
         current_services = self.config_entry.data.get(CONF_SELECTED_SERVICES, [])
+        options_dict = {service: service for service in (self._available_services or [])}
+        for svc in current_services:
+            if svc not in options_dict:
+                options_dict[svc] = f"{svc} (not found on router)"
+
         services_schema = vol.Schema({})
-        if self._available_services:
+        if options_dict:
             services_schema = vol.Schema(
                 {
                     vol.Optional(CONF_SELECTED_SERVICES, default=current_services): cv.multi_select(
-                        {service: service for service in self._available_services}
+                        options_dict
                     ),
                 }
             )
