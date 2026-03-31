@@ -52,9 +52,13 @@ class ExtendedUbus(Ubus):
         """Get mapping of physical interface names to SSIDs.
 
         Tries network.wireless status first (netifd runtime data).
-        Falls back to UCI wireless config when that call fails — this is
-        common on certain OpenWrt configurations where netifd returns
-        error code 2 for the wireless status call.
+        Falls back to querying iwinfo info per AP device when netifd
+        fails — this is reliable because iwinfo is the same source used
+        to populate the AP sensor entities.
+
+        Keys are stored in both bare form ("phy0-ap0") and with the
+        hostapd prefix ("hostapd.phy0-ap0") so lookups succeed in both
+        iwinfo and hostapd wireless_software modes.
         """
         # Check cache first
         if self._interface_to_ssid_cache:
@@ -73,39 +77,45 @@ class ExtendedUbus(Ubus):
                             ssid = interface.get("config", {}).get("ssid")
                             if ifname and ssid:
                                 mapping[ifname] = ssid
+                                mapping[f"hostapd.{ifname}"] = ssid
                                 _LOGGER.debug("Mapped interface %s to SSID %s", ifname, ssid)
         except Exception as primary_exc:
             _LOGGER.debug(
-                "network.wireless status unavailable (%s), trying UCI fallback", primary_exc
+                "network.wireless status unavailable (%s), trying iwinfo fallback", primary_exc
             )
 
-        # --- Fallback: UCI wireless config ---
+        # --- Fallback: iwinfo info per AP device ---
         if not mapping:
             try:
-                uci_result = await self.get_uci_config("wireless", "wifi-iface")
-                if isinstance(uci_result, dict) and "values" in uci_result:
-                    for _section, section_data in uci_result["values"].items():
-                        if not isinstance(section_data, dict):
-                            continue
-                        ifname = section_data.get("ifname")
-                        ssid = section_data.get("ssid")
-                        if ifname and ssid:
+                ap_result = await self.api_call(API_RPC_CALL, API_SUBSYS_IWINFO, API_METHOD_GET_AP)
+                ap_devices = list(ap_result.get("devices", [])) if isinstance(ap_result, dict) else []
+                for ifname in ap_devices:
+                    try:
+                        info = await self.api_call(
+                            API_RPC_CALL, API_SUBSYS_IWINFO, API_METHOD_INFO, {"device": ifname}
+                        )
+                        ssid = info.get("ssid") if isinstance(info, dict) else None
+                        if ssid:
                             mapping[ifname] = ssid
+                            mapping[f"hostapd.{ifname}"] = ssid
                             _LOGGER.debug(
-                                "UCI fallback: mapped interface %s to SSID %s", ifname, ssid
+                                "iwinfo fallback: mapped interface %s to SSID %s", ifname, ssid
                             )
-            except Exception as uci_exc:
-                _LOGGER.debug("UCI wireless fallback also unavailable: %s", uci_exc)
+                    except Exception:
+                        pass
+            except Exception as iwinfo_exc:
+                _LOGGER.debug("iwinfo SSID fallback also unavailable: %s", iwinfo_exc)
 
         if mapping:
             self._interface_to_ssid_cache = mapping
         else:
-            _LOGGER.warning(
-                "Could not resolve interface-to-SSID mapping via netifd or UCI; "
-                "AP entities will use raw interface names (e.g. phy0-ap0)"
+            _LOGGER.debug(
+                "Could not resolve interface-to-SSID mapping via netifd or iwinfo; "
+                "AP entities will use raw interface names as SSID labels"
             )
 
         return mapping
+
 
     async def file_read(self, path):
         """Read file content."""
