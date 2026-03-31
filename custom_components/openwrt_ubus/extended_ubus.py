@@ -49,39 +49,63 @@ class ExtendedUbus(Ubus):
         self._interface_to_ssid_cache = {}  # Cache for interface->SSID mapping
 
     async def get_interface_to_ssid_mapping(self):
-        """Get mapping of physical interface names to SSIDs."""
+        """Get mapping of physical interface names to SSIDs.
+
+        Tries network.wireless status first (netifd runtime data).
+        Falls back to UCI wireless config when that call fails — this is
+        common on certain OpenWrt configurations where netifd returns
+        error code 2 for the wireless status call.
+        """
+        # Check cache first
+        if self._interface_to_ssid_cache:
+            return self._interface_to_ssid_cache
+
+        mapping = {}
+
+        # --- Primary: netifd runtime status ---
         try:
-            # Check cache first
-            if self._interface_to_ssid_cache:
-                return self._interface_to_ssid_cache
-
-            # Get wireless status
             result = await self.api_call(API_RPC_CALL, API_SUBSYS_WIRELESS, "status", {})
+            if result:
+                for _radio_name, radio_data in result.items():
+                    if isinstance(radio_data, dict) and "interfaces" in radio_data:
+                        for interface in radio_data["interfaces"]:
+                            ifname = interface.get("ifname")
+                            ssid = interface.get("config", {}).get("ssid")
+                            if ifname and ssid:
+                                mapping[ifname] = ssid
+                                _LOGGER.debug("Mapped interface %s to SSID %s", ifname, ssid)
+        except Exception as primary_exc:
+            _LOGGER.debug(
+                "network.wireless status unavailable (%s), trying UCI fallback", primary_exc
+            )
 
-            if not result:
-                return {}
-
-            mapping = {}
-
-            # Parse the wireless status to build interface->SSID mapping
-            for radio_name, radio_data in result.items():
-                if isinstance(radio_data, dict) and "interfaces" in radio_data:
-                    for interface in radio_data["interfaces"]:
-                        ifname = interface.get("ifname")
-                        config = interface.get("config", {})
-                        ssid = config.get("ssid")
-
+        # --- Fallback: UCI wireless config ---
+        if not mapping:
+            try:
+                uci_result = await self.get_uci_config("wireless", "wifi-iface")
+                if isinstance(uci_result, dict) and "values" in uci_result:
+                    for _section, section_data in uci_result["values"].items():
+                        if not isinstance(section_data, dict):
+                            continue
+                        ifname = section_data.get("ifname")
+                        ssid = section_data.get("ssid")
                         if ifname and ssid:
                             mapping[ifname] = ssid
-                            _LOGGER.debug("Mapped interface %s to SSID %s", ifname, ssid)
+                            _LOGGER.debug(
+                                "UCI fallback: mapped interface %s to SSID %s", ifname, ssid
+                            )
+            except Exception as uci_exc:
+                _LOGGER.debug("UCI wireless fallback also unavailable: %s", uci_exc)
 
-            # Cache the mapping
+        if mapping:
             self._interface_to_ssid_cache = mapping
-            return mapping
+        else:
+            _LOGGER.warning(
+                "Could not resolve interface-to-SSID mapping via netifd or UCI; "
+                "AP entities will use raw interface names (e.g. phy0-ap0)"
+            )
 
-        except Exception as exc:
-            _LOGGER.error("Error getting interface to SSID mapping: %s", exc)
-            return {}
+        return mapping
 
     async def file_read(self, path):
         """Read file content."""
