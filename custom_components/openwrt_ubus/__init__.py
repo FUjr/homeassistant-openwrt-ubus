@@ -164,7 +164,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         hass.data[DOMAIN]["nlbwmon_available"] = nlbwmon_available
 
-        # Close the test connection
+        # Close the test connection — logout first to destroy the rpcd session,
+        # otherwise the session lingers until rpcd's own 300 s GC runs.
+        await ubus.logout()
         await ubus.close()
 
         # Create shared data manager
