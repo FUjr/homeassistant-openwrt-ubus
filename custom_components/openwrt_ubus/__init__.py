@@ -127,41 +127,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if session_id is None:
             raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {hostname}")
 
-        # Check for modem_ctrl availability and store the result
-        try:
-            modem_ctrl_list = await ubus.list_modem_ctrl()
-            modem_ctrl_available = modem_ctrl_list is not None and bool(modem_ctrl_list)
-            _LOGGER.debug("Modem_ctrl availability check: %s", modem_ctrl_available)
-        except Exception as exc:
-            _LOGGER.debug("Modem_ctrl not available: %s", exc)
-            modem_ctrl_available = False
+        import asyncio
 
-        # Store modem_ctrl availability in hass data
+        async def _check_availability(check_name: str, create_coro) -> bool:
+            """Run an availability check with retries for resilience during startup bursts."""
+            for attempt in range(1, 4):
+                try:
+                    result = await create_coro()
+                    # list_mwan3 etc can return empty lists/dicts if not supported gracefully
+                    if result:
+                        _LOGGER.debug("%s availability check: True", check_name)
+                        return True
+                    _LOGGER.debug("%s availability check returned False/None/Empty", check_name)
+                    return False
+                except Exception as exc:
+                    err_str = str(exc)
+                    # Don't retry permission errors
+                    if "Access denied" in err_str or type(exc).__name__ in ("PermissionError",):
+                        _LOGGER.debug("%s check failed (Permission Denied): %s", check_name, exc)
+                        return False
+                    
+                    _LOGGER.debug("%s check failed (attempt %d/3): %s", check_name, attempt, exc)
+                    if attempt < 3:
+                        await asyncio.sleep(2)
+            
+            return False
+
+        # Check for modem_ctrl availability and store the result
+        modem_ctrl_available = await _check_availability(
+            "Modem_ctrl", lambda: ubus.list_modem_ctrl()
+        )
         hass.data[DOMAIN]["modem_ctrl_available"] = modem_ctrl_available
 
         # Check for mwan3 availability and store the result
-        mwan3_available = False
-        try:
-            mwan3_list = await ubus.list_mwan3()
-            mwan3_available = mwan3_list is not None and bool(mwan3_list)
-            _LOGGER.debug("MWAN3 availability check: %s", mwan3_available)
-        except Exception as exc:
-            _LOGGER.debug("MWAN3 not available: %s", exc)
-            mwan3_available = False
-
-        # Store mwan3 availability in hass data
+        mwan3_available = await _check_availability(
+            "MWAN3", lambda: ubus.list_mwan3()
+        )
         hass.data[DOMAIN]["mwan3_available"] = mwan3_available
 
         # Check for nlbwmon availability/permission and store the result
-        nlbwmon_available = False
-        try:
-            await ubus.file_exec("/usr/sbin/nlbw", ["-h"])
-            nlbwmon_available = True
-            _LOGGER.debug("nlbwmon availability check: %s", nlbwmon_available)
-        except Exception as exc:
-            _LOGGER.debug("nlbwmon not available or not permitted: %s", exc)
-            nlbwmon_available = False
-
+        nlbwmon_available = await _check_availability(
+            "nlbwmon", lambda: ubus.file_exec("/usr/sbin/nlbw", ["-h"])
+        )
         hass.data[DOMAIN]["nlbwmon_available"] = nlbwmon_available
 
         # Close the test connection — logout first to destroy the rpcd session,
