@@ -105,6 +105,7 @@ class SharedUbusDataManager:
             "dhcp_clients_count": timedelta(seconds=sta_timeout),  # DHCP clients count
             "network_devices": timedelta(seconds=system_timeout),  # Network device status
             "wired_devices": timedelta(seconds=sta_timeout),  # Wired device tracking
+            "nlbwmon_top_hosts": timedelta(seconds=60),  # Per-host bandwidth usage via nlbwmon
         }
         self._update_locks: Dict[str, asyncio.Lock] = {key: asyncio.Lock() for key in self._update_intervals}
 
@@ -768,6 +769,128 @@ class SharedUbusDataManager:
             _LOGGER.error("Error fetching wired devices: %s", exc, exc_info=True)
             return {"wired_devices": {}}
 
+    async def _fetch_nlbwmon_top_hosts(self) -> Dict[str, Any]:
+        """Fetch top hosts by bandwidth usage using nlbwmon."""
+        import json
+
+        client = await self._get_ubus_client("nlbwmon")
+
+        try:
+            dhcp_software = self.entry.data.get(CONF_DHCP_SOFTWARE, DEFAULT_DHCP_SOFTWARE)
+            mac2name = await self._get_mac2name_mapping(dhcp_software)
+
+            result = await client.file_exec(
+                "/usr/sbin/nlbw",
+                ["-c", "json", "-g", "ip,mac", "-o", "-rx_bytes,-tx_bytes"],
+            )
+
+            stdout = result.get("stdout", "") if isinstance(result, dict) else ""
+            if not stdout:
+                return {"nlbwmon_top_hosts": {"top_hosts": [], "host_count": 0, "total_rx_bytes": 0, "total_tx_bytes": 0}}
+
+            payload = json.loads(stdout)
+            columns = payload.get("columns", [])
+            rows = payload.get("data", [])
+            column_map = {name: index for index, name in enumerate(columns)}
+
+            required_columns = {"ip", "mac", "conns", "rx_bytes", "tx_bytes"}
+            if not required_columns.issubset(column_map):
+                raise UpdateFailed(f"Unexpected nlbwmon columns: {columns}")
+
+            hosts = {}
+            total_rx_bytes = 0
+            total_tx_bytes = 0
+
+            for row in rows:
+                mac = str(row[column_map["mac"]] or "").upper()
+                ip_address = str(row[column_map["ip"]] or "")
+                rx_bytes = int(row[column_map["rx_bytes"]] or 0)
+                tx_bytes = int(row[column_map["tx_bytes"]] or 0)
+                conns = int(row[column_map["conns"]] or 0)
+
+                if mac == "00:00:00:00:00:00" and not ip_address:
+                    continue
+
+                host_key = mac if mac and mac != "00:00:00:00:00:00" else ip_address
+                if not host_key:
+                    continue
+
+                host = hosts.setdefault(
+                    host_key,
+                    {
+                        "mac": mac if mac != "00:00:00:00:00:00" else None,
+                        "ip": None,
+                        "hostname": None,
+                        "connections": 0,
+                        "rx_bytes": 0,
+                        "tx_bytes": 0,
+                    },
+                )
+
+                if ip_address and (host["ip"] is None or ":" not in ip_address):
+                    host["ip"] = ip_address
+
+                if host["mac"] and host["mac"] in mac2name:
+                    host["hostname"] = mac2name[host["mac"]].get("hostname") or host["hostname"]
+                    if not host["ip"]:
+                        host["ip"] = mac2name[host["mac"]].get("ip")
+
+                host["connections"] += conns
+                host["rx_bytes"] += rx_bytes
+                host["tx_bytes"] += tx_bytes
+                total_rx_bytes += rx_bytes
+                total_tx_bytes += tx_bytes
+
+            ranked_hosts = []
+            for host in hosts.values():
+                total_bytes = host["rx_bytes"] + host["tx_bytes"]
+                if total_bytes <= 0:
+                    continue
+
+                hostname = host["hostname"] or host["ip"] or host["mac"] or "Unknown"
+                ranked_hosts.append(
+                    {
+                        "hostname": hostname,
+                        "ip": host["ip"],
+                        "mac": host["mac"],
+                        "connections": host["connections"],
+                        "rx_bytes": host["rx_bytes"],
+                        "tx_bytes": host["tx_bytes"],
+                        "total_bytes": total_bytes,
+                    }
+                )
+
+            ranked_hosts.sort(key=lambda item: item["total_bytes"], reverse=True)
+
+            return {
+                "nlbwmon_top_hosts": {
+                    "top_hosts": ranked_hosts[:5],
+                    "host_count": len(ranked_hosts),
+                    "total_rx_bytes": total_rx_bytes,
+                    "total_tx_bytes": total_tx_bytes,
+                }
+            }
+
+        except Exception as exc:
+            if "Permission Denied" in str(exc) or "Access denied" in str(exc):
+                _LOGGER.warning(
+                    "nlbwmon data requires ubus file.exec permission for '/usr/sbin/nlbw'. "
+                    "Grant that command in the OpenWrt rpcd ACL to enable top-host usage data."
+                )
+            else:
+                _LOGGER.error("Error fetching nlbwmon top hosts: %s", exc)
+
+            return {
+                "nlbwmon_top_hosts": {
+                    "top_hosts": [],
+                    "host_count": 0,
+                    "total_rx_bytes": 0,
+                    "total_tx_bytes": 0,
+                }
+            }
+
+
+
     def _matches_interface(self, neighbor: dict, interface_filter: list) -> bool:
         """Check if a neighbor's interface matches any interface filter entry.
         
@@ -902,6 +1025,8 @@ class SharedUbusDataManager:
                     data = await self._fetch_network_devices()
                 elif data_type == "wired_devices":
                     data = await self._fetch_wired_devices()
+                elif data_type == "nlbwmon_top_hosts":
+                    data = await self._fetch_nlbwmon_top_hosts()
                 else:
                     # Defensive: This should not happen due to the check above, but log just in case
                     _LOGGER.error(

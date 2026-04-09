@@ -39,6 +39,9 @@ from .const import (
     DEFAULT_WIRELESS_SOFTWARE,
     DEFAULT_TRACKING_METHOD,
     DEFAULT_ENABLE_WIRED_TRACKER,
+    CONF_ENABLE_WIRELESS_TRACKERS,
+    CONF_WIRELESS_TRACKER_WHITELIST,
+    DEFAULT_ENABLE_WIRELESS_TRACKERS,
     DHCP_SOFTWARES,
     DOMAIN,
     WIRELESS_SOFTWARES,
@@ -205,6 +208,16 @@ async def async_setup_entry(
         entry.data.get(CONF_ENABLE_WIRED_TRACKER, DEFAULT_ENABLE_WIRED_TRACKER),
     )
 
+    # Check if wireless tracker is enabled
+    enable_wireless_trackers = entry.options.get(
+        CONF_ENABLE_WIRELESS_TRACKERS,
+        entry.data.get(CONF_ENABLE_WIRELESS_TRACKERS, DEFAULT_ENABLE_WIRELESS_TRACKERS),
+    )
+    wireless_whitelist = entry.options.get(
+        CONF_WIRELESS_TRACKER_WHITELIST,
+        entry.data.get(CONF_WIRELESS_TRACKER_WHITELIST, []),
+    )
+
     # Determine which data types the coordinator needs
     data_types = ["device_statistics"]  # WiFi devices
     if enable_wired_tracker:
@@ -250,9 +263,20 @@ async def async_setup_entry(
         all_devices = {}
         
         # Add WiFi devices
-        if "device_statistics" in coordinator.data:
+        if enable_wireless_trackers and "device_statistics" in coordinator.data:
             device_stats = coordinator.data["device_statistics"]
-            all_devices.update(device_stats)
+            if wireless_whitelist:
+                for mac, device_info in device_stats.items():
+                    ip_address = device_info.get("ip", "")
+                    mac_upper = mac.upper()
+                    if any(
+                        mac_upper.startswith(prefix.upper()) or 
+                        (ip_address and ip_address.startswith(prefix))
+                        for prefix in wireless_whitelist
+                    ):
+                        all_devices[mac] = device_info
+            else:
+                all_devices.update(device_stats)
         
         # Add wired devices
         if enable_wired_tracker and "wired_devices" in coordinator.data:
@@ -289,9 +313,20 @@ async def async_setup_entry(
         all_devices = {}
         
         # Add WiFi devices
-        if "device_statistics" in coordinator.data:
+        if enable_wireless_trackers and "device_statistics" in coordinator.data:
             device_stats = coordinator.data["device_statistics"]
-            all_devices.update(device_stats)
+            if wireless_whitelist:
+                for mac, device_info in device_stats.items():
+                    ip_address = device_info.get("ip", "")
+                    mac_upper = mac.upper()
+                    if any(
+                        mac_upper.startswith(prefix.upper()) or 
+                        (ip_address and ip_address.startswith(prefix))
+                        for prefix in wireless_whitelist
+                    ):
+                        all_devices[mac] = device_info
+            else:
+                all_devices.update(device_stats)
         
         # Add wired devices
         if enable_wired_tracker and "wired_devices" in coordinator.data:

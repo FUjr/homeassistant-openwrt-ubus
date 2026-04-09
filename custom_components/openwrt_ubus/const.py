@@ -26,6 +26,7 @@ CONF_ENABLE_AP_SENSORS = "enable_ap_sensors"
 CONF_ENABLE_ETH_SENSORS = "enable_eth_sensors"
 CONF_ENABLE_MWAN3_SENSORS = "enable_mwan3_sensors"
 CONF_ENABLE_SERVICE_CONTROLS = "enable_service_controls"
+CONF_ENABLE_NLBWMON_SENSORS = "enable_nlbwmon_sensors"
 
 CONF_ENABLE_DEVICE_KICK_BUTTONS = "enable_device_kick_buttons"
 CONF_ENABLE_REBOOT_BUTTON = "enable_reboot_button"
@@ -36,6 +37,12 @@ CONF_ENABLE_WIRED_TRACKER = "enable_wired_tracker"
 CONF_WIRED_TRACKER_NAME_PRIORITY = "wired_tracker_name_priority"
 CONF_WIRED_TRACKER_WHITELIST = "wired_tracker_whitelist"
 CONF_WIRED_TRACKER_INTERFACES = "wired_tracker_interfaces"
+# Wireless device tracker configuration
+CONF_ENABLE_WIRELESS_TRACKERS = "enable_wireless_trackers"
+CONF_WIRELESS_TRACKER_WHITELIST = "wireless_tracker_whitelist"
+# STA sensor selection
+CONF_SELECT_ALL_STA = "select_all_sta"
+CONF_SELECTED_STA = "selected_sta"
 
 # Timeout configuration
 CONF_SYSTEM_SENSOR_TIMEOUT = "system_sensor_timeout"
@@ -58,6 +65,7 @@ DEFAULT_ENABLE_ETH_SENSORS = True
 DEFAULT_ENABLE_MWAN3_SENSORS = True
 DEFAULT_ENABLE_SERVICE_CONTROLS = False
 DEFAULT_TRACKING_METHOD = "combined"
+DEFAULT_ENABLE_NLBWMON_SENSORS = False
 
 DEFAULT_ENABLE_DEVICE_KICK_BUTTONS = False
 DEFAULT_ENABLE_REBOOT_BUTTON = True
@@ -74,6 +82,9 @@ DEFAULT_ENABLE_WIRED_TRACKER = False
 DEFAULT_WIRED_TRACKER_NAME_PRIORITY = "ipv4"  # Options: ipv4, ipv6, mac
 DEFAULT_WIRED_TRACKER_WHITELIST = []  # Empty list means no filtering
 DEFAULT_WIRED_TRACKER_INTERFACES = []  # Empty list means no interface filtering
+DEFAULT_ENABLE_WIRELESS_TRACKERS = False
+DEFAULT_SELECT_ALL_STA = False
+DEFAULT_SELECTED_STA = []  # Empty list means no devices selected (only matters when select_all_sta is False)
 
 # Consider home configuration
 CONF_CONSIDER_HOME = "consider_home"
@@ -116,6 +127,7 @@ API_METHOD_LIST = "list"
 API_METHOD_INIT = "init"
 API_METHOD_SET = "set"
 API_METHOD_COMMIT = "commit"
+API_METHOD_EXEC = "exec"
 
 
 def _build_host_port(target: str, use_https: bool, port: int | None) -> str:

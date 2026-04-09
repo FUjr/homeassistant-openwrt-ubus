@@ -32,6 +32,7 @@ from .const import (
     CONF_ENABLE_AP_SENSORS,
     CONF_ENABLE_ETH_SENSORS,
     CONF_ENABLE_MWAN3_SENSORS,
+    CONF_ENABLE_NLBWMON_SENSORS,
     CONF_ENABLE_SERVICE_CONTROLS,
     CONF_SELECTED_SERVICES,
     DEFAULT_DHCP_SOFTWARE,
@@ -92,6 +93,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up openwrt ubus from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
+    # Backward compatibility: preserve pre-toggle behavior for legacy entries.
+    # New entries get an explicit value from config flow (default off).
+    if CONF_ENABLE_NLBWMON_SENSORS not in entry.data:
+        new_data = dict(entry.data)
+        new_data[CONF_ENABLE_NLBWMON_SENSORS] = True
+        hass.config_entries.async_update_entry(entry, data=new_data)
+        entry = hass.config_entries.async_get_entry(entry.entry_id)
+        if entry is None:
+            raise ConfigEntryNotReady("Failed to reload config entry data for nlbwmon migration")
+
     # Test connection before setting up platforms
     hostname = entry.data[CONF_HOST]
     try:
@@ -140,6 +151,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Store mwan3 availability in hass data
         hass.data[DOMAIN]["mwan3_available"] = mwan3_available
+
+        # Check for nlbwmon availability/permission and store the result
+        nlbwmon_available = False
+        try:
+            await ubus.file_exec("/usr/sbin/nlbw", ["-h"])
+            nlbwmon_available = True
+            _LOGGER.debug("nlbwmon availability check: %s", nlbwmon_available)
+        except Exception as exc:
+            _LOGGER.debug("nlbwmon not available or not permitted: %s", exc)
+            nlbwmon_available = False
+
+        hass.data[DOMAIN]["nlbwmon_available"] = nlbwmon_available
 
         # Close the test connection
         await ubus.close()

@@ -5,6 +5,7 @@ import logging
 from .Ubus import Ubus
 from .Ubus.interface import PreparedCall
 from .const import (
+    API_METHOD_EXEC,
     API_RPC_CALL,
     API_RPC_LIST,
     API_PARAM_CONFIG,
@@ -89,6 +90,18 @@ class ExtendedUbus(Ubus):
             API_SUBSYS_FILE,
             API_METHOD_READ,
             {API_PARAM_PATH: path},
+        )
+    
+    async def file_exec(self, command, params=None):
+        """Execute a command through ubus file.exec."""
+        return await self.api_call(
+            API_RPC_CALL,
+            API_SUBSYS_FILE,
+            API_METHOD_EXEC,
+            {
+                "command": command,
+                "params": params or [],
+            },
         )
 
     # --- ETH SENSOR DEBUG/ERROR LOGGING PATCH ---
@@ -356,6 +369,8 @@ class ExtendedUbus(Ubus):
     async def system_stat(self):
         """Kernel system statistics."""
         return await self.file_read("/proc/stat")
+    
+
 
     async def system_reboot(self):
         """Trigger a system reboot."""
@@ -611,6 +626,9 @@ class ExtendedUbus(Ubus):
 
         _LOGGER.debug("Got service list: %s", service_list_result)
 
+        # Also get procd service list to augment running status
+        procd_services = await self.api_call(API_RPC_CALL, "service", API_METHOD_LIST) or {}
+
         # Build batch calls for each service status
         services_with_status = {}
         prepared_calls: list[PreparedCall] = []
@@ -645,7 +663,7 @@ class ExtendedUbus(Ubus):
                             )
 
                             # Parse service status - OpenWrt RC returns different formats
-                            parsed_status = self._parse_service_status(service_status, service_name)
+                            parsed_status = self._parse_service_status(service_status, service_name, procd_services)
                             services_with_status[service_name] = parsed_status
                         else:
                             _LOGGER.debug(
@@ -682,8 +700,8 @@ class ExtendedUbus(Ubus):
         _LOGGER.debug("Final services with status: %s", services_with_status)
         return services_with_status
 
-    def _parse_service_status(self, status_data, service_name):
-        """Parse service status from RC API response."""
+    def _parse_service_status(self, status_data, service_name, procd_services=None):
+        """Parse service status from RC API response and augment with procd status."""
         _LOGGER.debug(
             "Parsing service status for %s: %s (type: %s)",
             service_name,
@@ -708,6 +726,23 @@ class ExtendedUbus(Ubus):
             running = status_data.get("running", False)
             enabled = status_data.get("enabled", False)
             start_priority = status_data.get("start", 0)
+
+            # Augment with procd data if it's considered not running by RC
+            if procd_services and not running:
+                if service_name in procd_services:
+                    service_procd = procd_services[service_name]
+                    
+                    if "instances" in service_procd:
+                        # Standard service with daemon processes
+                        instances = service_procd["instances"]
+                        for inst in instances.values():
+                            if inst.get("running"):
+                                running = True
+                                break
+                    else:
+                        # Non-daemon service registered as active in procd 
+                        # (e.g., adblock-fast with custom 'data', or qosmate with empty dict)
+                        running = True
 
             _LOGGER.debug(
                 "Service %s: running=%s, enabled=%s, start=%s",

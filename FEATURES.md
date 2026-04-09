@@ -2,6 +2,12 @@
 
 ## 🆕 Latest Updates
 
+### NLBWMon Toggle & Availability Guard (v2.1)
+- **🔕 New Config Toggle**: Added `Enable NLBWMon Top Hosts Sensor` in setup and options flow
+- **🛡️ Default Off for New Setups**: New integrations now start with NLBWMon disabled to reduce log noise on unsupported devices
+- **🔍 Startup Availability Check**: Integration now probes nlbwmon capability and skips entity creation when command/permissions are unavailable
+- **♻️ Legacy Compatibility**: Existing installations keep previous behavior unless the toggle is changed
+
 ### Service Control (v2.0)
 - **🔄 Switch Entities**: Real-time service start/stop control
 - **⚡ Button Entities**: Quick service actions (start, stop, enable, disable, restart)
@@ -105,6 +111,12 @@ SharedDataUpdateCoordinator
 - ✅ Enhanced error handling and recovery
 - ✅ Added configurable timeout settings
 - ✅ Improved translation support
+
+### v2.1 Release
+- ✅ Added NLBWMon sensor enable/disable toggle in config flow and options flow
+- ✅ Changed default NLBWMon state to disabled for new entries
+- ✅ Added startup availability guard to avoid recurring NLBWMon API errors on unsupported systems
+- ✅ Preserved legacy behavior for existing entries
 
 ### Bug Fixes
 - 🐛 Fixed service status always showing "off"

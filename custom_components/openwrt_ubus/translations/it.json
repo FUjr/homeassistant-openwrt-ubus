@@ -27,6 +27,7 @@
           "enable_sta_sensors": "Abilita Sensori Dispositivi WiFi",
           "enable_ap_sensors": "Abilita Sensori Access Point",
           "enable_eth_sensors": "Abilita Sensori Interfacce di Rete",
+          "enable_nlbwmon_sensors": "Abilita Sensore NLBWMon Host Principali",
           "enable_service_controls": "Abilita Controlli Servizi",
           "enable_device_kick_buttons": "Abilita Pulsanti Disconnessione Dispositivi (richiede hostapd)",
           "enable_wired_tracker": "Abilita Tracciamento Dispositivi Cablati"
@@ -88,6 +89,7 @@
           "enable_sta_sensors": "Abilita Sensori Dispositivi WiFi",
           "enable_ap_sensors": "Abilita Sensori Access Point",
           "enable_eth_sensors": "Abilita Sensori Interfacce di Rete",
+          "enable_nlbwmon_sensors": "Abilita Sensore NLBWMon Host Principali",
           "enable_service_controls": "Abilita Controlli Servizi",
           "enable_device_kick_buttons": "Abilita Pulsanti Disconnessione Dispositivi",
           "enable_wired_tracker": "Abilita Tracciamento Dispositivi Cablati",
@@ -110,6 +112,7 @@
           "enable_sta_sensors": "Monitora i dispositivi WiFi connessi e le loro statistiche",
           "enable_ap_sensors": "Monitora le informazioni dell'interfaccia Access Point (dettagli rete WiFi)",
           "enable_eth_sensors": "Monitora le statistiche delle interfacce di rete",
+          "enable_nlbwmon_sensors": "Monitora gli host con maggiore utilizzo di banda tramite nlbwmon (richiede /usr/sbin/nlbw e permesso ubus file.exec)",
           "enable_device_kick_buttons": "Abilita i pulsanti per disconnettere i dispositivi dagli Access Point (richiede hostapd)",
           "enable_wired_tracker": "Traccia dispositivi cablati utilizzando la tabella dei vicini IP (filtra dispositivi WiFi)",
           "wired_tracker_name_priority": "Quando non viene trovato un hostname, usa IPv4, IPv6 o indirizzo MAC come nome del dispositivo",

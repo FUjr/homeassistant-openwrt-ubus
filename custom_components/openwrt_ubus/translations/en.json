@@ -24,13 +24,30 @@
         "data": {
           "enable_system_sensors": "Enable System Sensors",
           "enable_qmodem_sensors": "Enable QModem Sensors",
-          "enable_sta_sensors": "Enable Station (WiFi Device) Sensors",
+          "enable_sta_sensors": "Enable Station (WiFi Device) Sensors (requires iwinfo)",
           "enable_ap_sensors": "Enable Access Point Sensors",
           "enable_eth_sensors": "Enable Network Interface Sensors",
           "enable_mwan3_sensors": "Enable mwan3 Sensors (if mwan3 is installed)",
+          "enable_nlbwmon_sensors": "Enable NLBWMon Top Hosts Sensor",
           "enable_service_controls": "Enable Service Controls",
           "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)",
+          "enable_wireless_trackers": "Enable Wireless Device Tracking",
           "enable_wired_tracker": "Enable Wired Device Tracking"
+        }
+      },
+      "wireless_tracker_config": {
+        "title": "OpenWrt ubus - Wireless Device Tracker Configuration",
+        "description": "Configure wireless device tracking filters for {host}. Leave the whitelist empty to track all connected WiFi devices.",
+        "data": {
+          "wireless_tracker_whitelist": "Whitelist (comma-separated IP/MAC prefixes)"
+        }
+      },
+      "sta_sensors_config": {
+        "title": "OpenWrt ubus - Station Sensor Device Selection",
+        "description": "Select which WiFi devices should have sensor entities created. Note: This list only shows devices visible via iwinfo. If the list is empty, ensure iwinfo is installed and at least one device is connected.\n\nHost: {host}",
+        "data": {
+          "select_all_sta": "Track all connected stations (no filter)",
+          "selected_sta": "Devices to Track"
         }
       },
       "services": {
@@ -78,13 +95,17 @@
           "dhcp_software": "DHCP Software",
           "enable_system_sensors": "Enable System Sensors",
           "enable_qmodem_sensors": "Enable QModem Sensors",
-          "enable_sta_sensors": "Enable Station (WiFi Device) Sensors",
+          "enable_sta_sensors": "Enable Station (WiFi Device) Sensors (requires iwinfo)",
+          "select_all_sta": "Track all connected stations (no filter)",
           "enable_ap_sensors": "Enable Access Point Sensors",
           "enable_eth_sensors": "Enable Network Interface Sensors",
           "enable_mwan3_sensors": "Enable mwan3 Sensors (if mwan3 is installed)",
+          "enable_nlbwmon_sensors": "Enable NLBWMon Top Hosts Sensor",
           "enable_service_controls": "Enable Service Controls",
           "enable_device_kick_buttons": "Enable Device Kick Buttons",
           "enable_reboot_button": "Enable Reboot Button",
+          "enable_wireless_trackers": "Enable Wireless Device Tracking",
+          "wireless_tracker_whitelist": "Wireless Device Whitelist",
           "enable_wired_tracker": "Enable Wired Device Tracking",
           "wired_tracker_name_priority": "Wired Device Name Priority",
           "wired_tracker_whitelist": "Wired Device Whitelist",
@@ -106,9 +127,11 @@
           "dhcp_software": "Software used to get DHCP lease information",
           "enable_system_sensors": "Monitor router system information (uptime, memory, load)",
           "enable_qmodem_sensors": "Monitor cellular modem information (if available)",
-          "enable_sta_sensors": "Monitor connected WiFi devices and their statistics",
+          "enable_sta_sensors": "Monitor connected WiFi devices and their statistics (requires iwinfo)",
+          "select_all_sta": "When enabled, sensors will be created for ALL connected devices without filtering",
           "enable_ap_sensors": "Monitor access point interface information (WiFi network details)",
           "enable_eth_sensors": "Monitor network interface statistics",
+          "enable_nlbwmon_sensors": "Monitor top bandwidth-consuming hosts using nlbwmon (requires /usr/sbin/nlbw and ubus file.exec permission)",
           "enable_device_kick_buttons": "Enable buttons to disconnect devices from Access Points (requires hostapd)",
           "enable_wired_tracker": "Track wired devices using IP neighbor tables (filters out WiFi devices)",
           "wired_tracker_name_priority": "When hostname is not found, use IPv4, IPv6, or MAC address as device name",
@@ -120,6 +143,14 @@
           "tracking_method": "Tracking method for devices: 'uniqueid' uses MAC address only (device roams between APs), 'combined' uses AP+MAC (separate entities per AP)",
           "mwan3_sensor_timeout": "How often to update mwan3 status data (30-600 seconds)",
           "enable_mwan3_sensors": "Monitor mwan3 multi-WAN load balancing status"
+        }
+      },
+      "sta_sensors_config": {
+        "title": "OpenWrt ubus - Station Sensor Device Selection",
+        "description": "Select which WiFi devices should have sensor entities created. Note: This list only shows devices visible via iwinfo. If the list is empty, ensure iwinfo is installed and at least one device is connected.\n\nHost: {host}",
+        "data": {
+          "select_all_sta": "Track all connected stations (no filter)",
+          "selected_sta": "Devices to Track"
         }
       }
     }
