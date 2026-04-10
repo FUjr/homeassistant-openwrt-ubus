@@ -30,6 +30,7 @@
           "enable_nlbwmon_sensors": "Enable NLBWMon Top Hosts Sensor",
           "enable_service_controls": "Enable Service Controls",
           "enable_device_kick_buttons": "Enable Device Kick Buttons (requires hostapd)",
+          "enable_reboot_button": "Enable Reboot Button",
           "enable_wireless_trackers": "Enable Wireless Device Tracking",
           "enable_wired_tracker": "Enable Wired Device Tracking"
         }
@@ -109,6 +110,7 @@
           "enable_nlbwmon_sensors": "Enable NLBWMon Top Hosts Sensor",
           "enable_service_controls": "Enable Service Controls",
           "enable_device_kick_buttons": "Enable Device Kick Buttons",
+          "enable_reboot_button": "Enable Reboot Button",
           "enable_wireless_trackers": "Enable Wireless Device Tracking",
           "wireless_tracker_whitelist": "Wireless Device Whitelist",
           "enable_wired_tracker": "Enable Wired Device Tracking",
