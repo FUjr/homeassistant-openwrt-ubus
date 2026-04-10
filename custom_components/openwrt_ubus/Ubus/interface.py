@@ -81,6 +81,7 @@ class Ubus:
         self.session_id: str | None = None
         self.session_expire = 0
         self._session_created_internally = False
+        self._connect_lock = asyncio.Lock()
 
     def set_session(self, session):
         """Set the aiohttp session to use."""
@@ -103,9 +104,12 @@ class Ubus:
             self._session_created_internally = True
 
     async def _ensure_session_is_valid(self):
-        """Ensure session is still valid"""
+        """Ensure session is still valid, serialising reconnect attempts with a lock."""
         if self.session_expire <= (time.time() - 15):
-            await self.connect()
+            async with self._connect_lock:
+                # Double-check: another coroutine may have reconnected while we waited
+                if self.session_expire <= (time.time() - 15):
+                    await self.connect()
 
     async def api_call(
         self,
@@ -333,6 +337,18 @@ class Ubus:
 
     async def connect(self):
         """Connect to OpenWrt ubus API."""
+        # Destroy the existing session on rpcd before creating a new one to
+        # avoid orphaned sessions accumulating in rpcd memory.
+        if self.session_id is not None:
+            try:
+                await self._api_call(
+                    API_RPC_CALL,
+                    API_SUBSYS_SESSION,
+                    API_SESSION_METHOD_DESTROY,
+                )
+            except Exception:
+                pass  # Best-effort cleanup; ignore errors (session may already be gone)
+
         self.session_expire = 0
         self.session_id = None
 
