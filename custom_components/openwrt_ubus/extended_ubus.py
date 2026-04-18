@@ -164,70 +164,139 @@ class ExtendedUbus(Ubus):
             _LOGGER.debug("Error reading connection tracking count: %s", exc)
             return None
 
-    async def get_system_temperatures(self):
-        """Read system temperature sensors from /sys/class/hwmon/*/temp1_input."""
+    async def get_system_temperatures(self) -> dict:
+        """Read system temperature sensors, trying multiple discovery paths.
+
+        Strategy 1 — /sys/class/hwmon/ (standard Linux hwmon):
+          Each hwmon* entry is typically a *symlink* on most kernels, not a
+          plain directory. The previous implementation skipped all symlinks
+          (``entry["type"] != "directory"``), so it silently found nothing.
+          We now accept both "directory" and "symlink" entry types.
+
+        Strategy 2 — /sys/class/thermal/ (common on ARM/MIPS routers):
+          Qualcomm, MediaTek, and similar SoCs expose temperatures through
+          thermal_zone* entries rather than hwmon. Used as a fallback when
+          hwmon yields no results.
+        """
+        temperatures = await self._get_hwmon_temperatures()
+        if not temperatures:
+            _LOGGER.debug("No hwmon temperatures found, trying thermal_zone fallback")
+            temperatures = await self._get_thermal_zone_temperatures()
+        if not temperatures:
+            _LOGGER.warning(
+                "No temperature sensors found on this device. "
+                "Checked /sys/class/hwmon/ and /sys/class/thermal/. "
+                "Enable debug logging for details."
+            )
+        return temperatures
+
+    async def _get_hwmon_temperatures(self) -> dict:
+        """Read temperatures from /sys/class/hwmon/*/temp1_input."""
         try:
-            # First, list all hwmon directories
-            hwmon_list_result = await self.api_call(
+            list_result = await self.api_call(
                 API_RPC_CALL,
                 API_SUBSYS_FILE,
                 "list",
                 {"path": "/sys/class/hwmon/"},
             )
-            _LOGGER.debug("hwmon list result: %s", hwmon_list_result)
-            if not hwmon_list_result or "entries" not in hwmon_list_result:
-                _LOGGER.debug("No hwmon directories found or empty entries in result")
+            _LOGGER.debug("hwmon list result: %s", list_result)
+            if not list_result or "entries" not in list_result:
+                _LOGGER.debug("hwmon: no entries returned")
                 return {}
 
-            temperatures = {}
-
-            # Process each hwmon directory
-            for entry in hwmon_list_result["entries"]:
-                if entry["type"] != "directory":
+            temperatures: dict = {}
+            for entry in list_result["entries"]:
+                # /sys/class entries are *symlinks* on most kernels — accept both
+                if entry.get("type") not in ("directory", "symlink", "link"):
                     continue
 
                 hwmon_dir = entry["name"]
                 hwmon_path = f"/sys/class/hwmon/{hwmon_dir}"
 
-                # Try to read the name file
                 try:
+                    # Read optional name file for a friendly sensor label
+                    sensor_name = hwmon_dir  # safe default
                     name_result = await self.file_read(f"{hwmon_path}/name")
-                    _LOGGER.debug("Read %s/name => %s", hwmon_path, name_result)
-                    sensor_name = f"hwmon{hwmon_dir}"  # Default name based on directory
+                    _LOGGER.debug("hwmon %s/name => %s", hwmon_path, name_result)
                     if name_result and "data" in name_result:
                         sensor_name = name_result["data"].strip()
-                    elif name_result is not None:
-                        _LOGGER.debug("Name result exists but no 'data' field: %s", name_result)
-                        # If result is a list with error code, try to continue anyway
-                        if isinstance(name_result, list) and len(name_result) > 0:
-                            _LOGGER.debug(
-                                "Name file read returned error code: %s, using default name",
-                                name_result,
-                            )
 
-                    # Try multiple temperature inputs if available
+                    # Read temperature (milli-°C → °C)
                     temp_path = f"{hwmon_path}/temp1_input"
                     temp_result = await self.file_read(temp_path)
-                    _LOGGER.debug("Read %s => %s", temp_path, temp_result)
-                    _LOGGER.debug("Temp result type: %s", type(temp_result))
+                    _LOGGER.debug("hwmon %s => %s", temp_path, temp_result)
                     if temp_result and "data" in temp_result:
-                        temp_value = int(temp_result["data"].strip()) / 1000.0
-                        temperatures[sensor_name] = temp_value
-                    elif temp_result is not None:
-                        _LOGGER.debug("Temp result exists but no 'data' field: %s", temp_result)
+                        temperatures[sensor_name] = int(temp_result["data"].strip()) / 1000.0
+                    else:
+                        _LOGGER.debug("hwmon: no data field in temp result: %s", temp_result)
 
                 except (ValueError, TypeError) as exc:
-                    _LOGGER.debug(
-                        "Error converting temperature value from %s: %s",
-                        temp_result,
-                        exc,
-                    )
-                    continue
+                    _LOGGER.debug("hwmon: error parsing temp from %s: %s", hwmon_path, exc)
 
             return temperatures
 
         except Exception as exc:
-            _LOGGER.debug("Error reading system temperatures: %s", exc)
+            _LOGGER.debug("hwmon: error listing /sys/class/hwmon/: %s", exc)
+            return {}
+
+    async def _get_thermal_zone_temperatures(self) -> dict:
+        """Read temperatures from /sys/class/thermal/thermal_zone*/temp.
+
+        Common on ARM/MIPS SoCs (Qualcomm IPQ, MediaTek MT76xx, etc.).
+        Each thermal_zone has a 'temp' file (milli-°C) and an optional
+        'type' file with a human-readable label.
+        """
+        try:
+            list_result = await self.api_call(
+                API_RPC_CALL,
+                API_SUBSYS_FILE,
+                "list",
+                {"path": "/sys/class/thermal/"},
+            )
+            _LOGGER.debug("thermal list result: %s", list_result)
+            if not list_result or "entries" not in list_result:
+                _LOGGER.debug("thermal: no entries returned")
+                return {}
+
+            temperatures: dict = {}
+            for entry in list_result["entries"]:
+                zone_name = entry.get("name", "")
+                if not zone_name.startswith("thermal_zone"):
+                    continue
+                # Accept both symlinks and directories (same kernel behaviour as hwmon)
+                if entry.get("type") not in ("directory", "symlink", "link"):
+                    continue
+
+                zone_path = f"/sys/class/thermal/{zone_name}"
+                try:
+                    # Read optional type file for a friendly label
+                    sensor_name = zone_name  # safe default
+                    type_result = await self.file_read(f"{zone_path}/type")
+                    _LOGGER.debug("thermal %s/type => %s", zone_path, type_result)
+                    if type_result and "data" in type_result:
+                        raw_type = type_result["data"].strip()
+                        # Append zone index to avoid duplicates (e.g. "cpu-0", "cpu-1")
+                        zone_index = zone_name.replace("thermal_zone", "")
+                        sensor_name = f"{raw_type}-{zone_index}" if zone_index else raw_type
+
+                    # Read temperature (milli-°C → °C)
+                    temp_result = await self.file_read(f"{zone_path}/temp")
+                    _LOGGER.debug("thermal %s/temp => %s", zone_path, temp_result)
+                    if temp_result and "data" in temp_result:
+                        temp_raw = int(temp_result["data"].strip())
+                        # Values > 1000 are in milli-°C; small values are already °C
+                        temp_c = temp_raw / 1000.0 if temp_raw > 1000 else float(temp_raw)
+                        temperatures[sensor_name] = temp_c
+                    else:
+                        _LOGGER.debug("thermal: no data field in temp result: %s", temp_result)
+
+                except (ValueError, TypeError) as exc:
+                    _LOGGER.debug("thermal: error parsing temp from %s: %s", zone_path, exc)
+
+            return temperatures
+
+        except Exception as exc:
+            _LOGGER.debug("thermal: error listing /sys/class/thermal/: %s", exc)
             return {}
 
     async def get_dhcp_clients_count(self):
