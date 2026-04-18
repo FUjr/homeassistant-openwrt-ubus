@@ -257,9 +257,16 @@ async def async_setup_entry(
     if coordinator.data and "system_temperatures" in coordinator.data:
         temperatures = coordinator.data["system_temperatures"]
         for sensor_name, temp_value in temperatures.items():
+            # Normalize key to snake_case: kernel names may contain hyphens
+            # (e.g. "cpu-thermal-0") which would break the integration's
+            # snake_case-only convention for keys and unique_ids.
+            normalized_key = sensor_name.replace("-", "_")
+            # Normalize display name to Title Case to match existing sensors
+            # ("CPU Usage", "Free Memory", etc.). Underscores → spaces first.
+            normalized_name = sensor_name.replace("_", " ").replace("-", " ").title()
             temp_description = SensorEntityDescription(
-                key=f"temperature_{sensor_name}",
-                name=f"Temperature {sensor_name}",
+                key=f"temperature_{normalized_key}",
+                name=f"Temperature {normalized_name}",
                 device_class=SensorDeviceClass.TEMPERATURE,
                 state_class=SensorStateClass.MEASUREMENT,
                 native_unit_of_measurement=UnitOfTemperature.CELSIUS,
