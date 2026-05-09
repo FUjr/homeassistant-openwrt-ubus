@@ -132,7 +132,7 @@
           "endpoint": "Custom ubus endpoint path (default: ubus). Change this if your router uses a reverse proxy or custom path",
           "wireless_software": "Software used to get wireless information (iwinfo or hostapd)",
           "dhcp_software": "Software used to get DHCP lease information",
-          "enable_system_sensors": "Monitor router system information (uptime, memory, load)",
+          "enable_system_sensors": "Monitor router system information (uptime, memory, load, temperature)",
           "enable_qmodem_sensors": "Monitor cellular modem information (if available)",
           "enable_sta_sensors": "Monitor connected WiFi devices and their statistics (requires iwinfo)",
           "enable_ap_sensors": "Monitor access point interface information (WiFi network details)",
