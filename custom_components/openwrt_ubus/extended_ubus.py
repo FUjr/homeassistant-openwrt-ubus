@@ -49,39 +49,73 @@ class ExtendedUbus(Ubus):
         self._interface_to_ssid_cache = {}  # Cache for interface->SSID mapping
 
     async def get_interface_to_ssid_mapping(self):
-        """Get mapping of physical interface names to SSIDs."""
+        """Get mapping of physical interface names to SSIDs.
+
+        Tries network.wireless status first (netifd runtime data).
+        Falls back to querying iwinfo info per AP device when netifd
+        fails — this is reliable because iwinfo is the same source used
+        to populate the AP sensor entities.
+
+        Keys are stored in both bare form ("phy0-ap0") and with the
+        hostapd prefix ("hostapd.phy0-ap0") so lookups succeed in both
+        iwinfo and hostapd wireless_software modes.
+        """
+        # Check cache first
+        if self._interface_to_ssid_cache:
+            return self._interface_to_ssid_cache
+
+        mapping = {}
+
+        # --- Primary: netifd runtime status ---
         try:
-            # Check cache first
-            if self._interface_to_ssid_cache:
-                return self._interface_to_ssid_cache
-
-            # Get wireless status
             result = await self.api_call(API_RPC_CALL, API_SUBSYS_WIRELESS, "status", {})
+            if result:
+                for _radio_name, radio_data in result.items():
+                    if isinstance(radio_data, dict) and "interfaces" in radio_data:
+                        for interface in radio_data["interfaces"]:
+                            ifname = interface.get("ifname")
+                            ssid = interface.get("config", {}).get("ssid")
+                            if ifname and ssid:
+                                mapping[ifname] = ssid
+                                mapping[f"hostapd.{ifname}"] = ssid
+                                _LOGGER.debug("Mapped interface %s to SSID %s", ifname, ssid)
+        except Exception as primary_exc:
+            _LOGGER.debug(
+                "network.wireless status unavailable (%s), trying iwinfo fallback", primary_exc
+            )
 
-            if not result:
-                return {}
-
-            mapping = {}
-
-            # Parse the wireless status to build interface->SSID mapping
-            for radio_name, radio_data in result.items():
-                if isinstance(radio_data, dict) and "interfaces" in radio_data:
-                    for interface in radio_data["interfaces"]:
-                        ifname = interface.get("ifname")
-                        config = interface.get("config", {})
-                        ssid = config.get("ssid")
-
-                        if ifname and ssid:
+        # --- Fallback: iwinfo info per AP device ---
+        if not mapping:
+            try:
+                ap_result = await self.api_call(API_RPC_CALL, API_SUBSYS_IWINFO, API_METHOD_GET_AP)
+                ap_devices = list(ap_result.get("devices", [])) if isinstance(ap_result, dict) else []
+                for ifname in ap_devices:
+                    try:
+                        info = await self.api_call(
+                            API_RPC_CALL, API_SUBSYS_IWINFO, API_METHOD_INFO, {"device": ifname}
+                        )
+                        ssid = info.get("ssid") if isinstance(info, dict) else None
+                        if ssid:
                             mapping[ifname] = ssid
-                            _LOGGER.debug("Mapped interface %s to SSID %s", ifname, ssid)
+                            mapping[f"hostapd.{ifname}"] = ssid
+                            _LOGGER.debug(
+                                "iwinfo fallback: mapped interface %s to SSID %s", ifname, ssid
+                            )
+                    except Exception:
+                        pass
+            except Exception as iwinfo_exc:
+                _LOGGER.debug("iwinfo SSID fallback also unavailable: %s", iwinfo_exc)
 
-            # Cache the mapping
+        if mapping:
             self._interface_to_ssid_cache = mapping
-            return mapping
+        else:
+            _LOGGER.debug(
+                "Could not resolve interface-to-SSID mapping via netifd or iwinfo; "
+                "AP entities will use raw interface names as SSID labels"
+            )
 
-        except Exception as exc:
-            _LOGGER.error("Error getting interface to SSID mapping: %s", exc)
-            return {}
+        return mapping
+
 
     async def file_read(self, path):
         """Read file content."""
