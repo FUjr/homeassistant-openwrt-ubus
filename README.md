@@ -762,7 +762,7 @@ custom_components/openwrt_ubus/
 │   └── device_kick_button.py # Device kick functionality with hostapd integration
 ├── sensors/                # Individual sensor platform modules
 │   ├── __init__.py
-│   ├── system_sensor.py    # System information sensors (uptime, memory, load)
+│   ├── system_sensor.py    # System information sensors (uptime, memory, load, temperature)
 │   ├── qmodem_sensor.py    # QModem/LTE sensors (signal, connection, data)
 │   ├── sta_sensor.py       # Wireless station sensors (per-device metrics)
 │   └── ap_sensor.py        # Access Point sensors (interface status)

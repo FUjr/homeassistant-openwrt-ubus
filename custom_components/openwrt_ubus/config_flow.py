@@ -678,10 +678,6 @@ class OpenwrtUbusOptionsFlow(OptionsFlow):
                     default=current_data.get(CONF_ENABLE_STA_SENSORS, DEFAULT_ENABLE_STA_SENSORS),
                 ): bool,
                 vol.Optional(
-                    CONF_SELECT_ALL_STA,
-                    default=current_data.get(CONF_SELECT_ALL_STA, DEFAULT_SELECT_ALL_STA),
-                ): bool,
-                vol.Optional(
                     CONF_ENABLE_AP_SENSORS,
                     default=current_data.get(CONF_ENABLE_AP_SENSORS, DEFAULT_ENABLE_AP_SENSORS),
                 ): bool,
