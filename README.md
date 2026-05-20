@@ -189,8 +189,8 @@ cat > /usr/share/rpcd/acl.d/root.json << 'EOF'
         "dhcp": [ "ipv4leases", "ipv6leases" ],
         "file": [ "read" ],
         "uci": [ "get" ],
-        "rc": [ "list", "init" ]
-        "mwan3": [ "get" ],
+        "rc": [ "list", "init" ],
+        "mwan3": [ "get" ]
       },
       "file": {
         "/proc/stat": [ "read" ],
