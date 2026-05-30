@@ -540,7 +540,7 @@ class DeviceKickButton(CoordinatorEntity[SharedDataUpdateCoordinator], ButtonEnt
             "router": self._host,
             "ap_device": ap_device,
             "ap_ssid": ap_ssid,
-            "hostapd_interface": f"hostapd.{ap_device}",
+            "hostapd_interface": ap_device if ap_device.startswith("hostapd.") else f"hostapd.{ap_device}",
         }
 
     async def async_press(self) -> None:
@@ -555,7 +555,7 @@ class DeviceKickButton(CoordinatorEntity[SharedDataUpdateCoordinator], ButtonEnt
             if not ap_device:
                 raise HomeAssistantError(f"Cannot kick device {hostname}: no AP information available")
 
-            hostapd_interface = f"hostapd.{ap_device}"
+            hostapd_interface = ap_device if ap_device.startswith("hostapd.") else f"hostapd.{ap_device}"
 
             _LOGGER.info(
                 "Kicking device %s (%s) from %s/%s (%s)",
