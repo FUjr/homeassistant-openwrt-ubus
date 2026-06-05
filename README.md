@@ -179,7 +179,7 @@ cat > /usr/share/rpcd/acl.d/root.json << 'EOF'
     "description": "Home Assistant access",
     "read": {
       "ubus": {
-        "session": [ "access", "login", "list" ],
+        "session": [ "access", "login", "list", "destroy" ],
         "system": [ "board", "info" ],
         "iwinfo": [ "devices", "info", "assoclist" ],
         "hostapd.*": [ "*" ],
@@ -202,7 +202,11 @@ cat > /usr/share/rpcd/acl.d/root.json << 'EOF'
     "write": {
       "ubus": {
         "hostapd.*": [ "del_client" ],
+        "file": [ "exec" ],
         "rc": [ "init" ]
+      },
+      "file": {
+        "/usr/sbin/nlbw": [ "exec" ]
       }
     }
   }
@@ -210,6 +214,8 @@ cat > /usr/share/rpcd/acl.d/root.json << 'EOF'
 ```
 
 > **Important**: Without ACL configuration, device names may appear as MAC addresses instead of hostnames.
+
+> **NLBWMon note**: `file.exec` for `/usr/sbin/nlbw` is only required when the NLBWMon top-hosts sensor is enabled. AP-only or minimal OpenWrt installs can leave NLBWMon disabled.
 
 ## 🎛️ Features & Configuration
 
@@ -691,6 +697,13 @@ Fine-tune integration performance based on your network and router capabilities:
 - ✅ Test system data access: `ubus call system info && ubus call system board`
 - ✅ Check network connectivity stability between Home Assistant and router
 - ✅ Review timeout settings in integration configuration
+
+**📡 WiFi Devices Unavailable After v0.0.9 Upgrade**
+- ✅ If you use a fine-grained OpenWrt rpcd ACL, update it with the current permissions in [Router Permissions Setup](#router-permissions-setup-🔐)
+- ✅ Add `session.destroy` permission; v0.0.9 cleans up ubus sessions explicitly
+- ✅ If NLBWMon is enabled, allow `file.exec` for `/usr/sbin/nlbw`, or disable the NLBWMon top-hosts sensor
+- ✅ Restart services after ACL changes: `/etc/init.d/rpcd restart && /etc/init.d/uhttpd restart`
+- ✅ Permission errors such as `Access denied` for `session.destroy` or `file.exec` usually mean the router ACL is stale
 
 **🏷️ Devices Show MAC Addresses Instead of Hostnames**
 - ✅ Ensure hostname resolution ACL is properly configured (see [Router Permissions Setup](#router-permissions-setup-🔐))
