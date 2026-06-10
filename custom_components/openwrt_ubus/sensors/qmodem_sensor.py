@@ -239,6 +239,11 @@ async def async_setup_entry(
 class QModemSensor(CoordinatorEntity, SensorEntity):
     """Representation of a QModem sensor."""
 
+    # raw_data carries the full modem dump and changes every poll. Keep it
+    # live for debugging but never record it, otherwise it forces a new state
+    # row + unique attribute blob every update.
+    _unrecorded_attributes = frozenset({"raw_data"})
+
     def __init__(
         self,
         coordinator: SharedDataUpdateCoordinator,
