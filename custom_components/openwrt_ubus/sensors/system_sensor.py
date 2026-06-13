@@ -299,6 +299,11 @@ class SystemInfoCoordinator(DataUpdateCoordinator):
 class SystemInfoSensor(CoordinatorEntity, SensorEntity):
     """Representation of a system information sensor."""
 
+    # raw_data carries the full coordinator dump and changes every poll
+    # (uptime, /proc/stat). Keep it live for debugging but never record it,
+    # otherwise it forces a new state row + unique attribute blob every update.
+    _unrecorded_attributes = frozenset({"raw_data"})
+
     def __init__(
         self,
         coordinator: SharedDataUpdateCoordinator,
