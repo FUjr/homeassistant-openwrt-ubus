@@ -9,7 +9,7 @@
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/fujr/homeassistant-openwrt-ubus/issues",
-  "loggers": ["openwrt_ubus"],
-  "requirements": ["aiohttp>=3.0.0"],
+  "loggers": ["custom_components.openwrt_ubus"],
+  "requirements": [],
   "version": "0.0.10"
 }

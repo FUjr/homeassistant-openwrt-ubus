@@ -297,7 +297,7 @@ async def async_setup_entry(
     _async_add_kick_buttons()
 
     # Listen for coordinator updates to refresh buttons
-    coordinator.async_add_listener(_async_add_kick_buttons)
+    entry.async_on_unload(coordinator.async_add_listener(_async_add_kick_buttons))
 
     # Return None to indicate we don't need tracking in button.py
     return None

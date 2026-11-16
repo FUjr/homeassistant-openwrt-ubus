@@ -195,7 +195,7 @@ async def async_setup_entry(
     else:
         _LOGGER.warning("No network devices found in coordinator data")
 
-    async_add_entities(entities, True)
+    async_add_entities(entities)
     _LOGGER.info("Created %d network interface sensor entities", len(entities))
 
     # Return the coordinator for the main sensor setup

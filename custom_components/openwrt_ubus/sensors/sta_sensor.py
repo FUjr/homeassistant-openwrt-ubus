@@ -532,7 +532,7 @@ async def async_setup_entry(
 
             # Add new entities only if there are any
             if new_entities:
-                async_add_entities(new_entities, True)
+                async_add_entities(new_entities)
                 _LOGGER.info(
                     "Created %d STA sensor entities for %d new devices",
                     len(new_entities),
@@ -572,7 +572,7 @@ async def async_setup_entry(
 
     # Add initial entities if any
     if initial_entities:
-        async_add_entities(initial_entities, True)
+        async_add_entities(initial_entities)
         _LOGGER.info("Set up %d initial STA statistics sensors", len(initial_entities))
 
     # Create sync wrapper for async coordinator update handler
@@ -581,7 +581,7 @@ async def async_setup_entry(
         hass.async_create_task(_handle_coordinator_update_async())
 
     # Register the update listener
-    coordinator.async_add_listener(_handle_coordinator_update)
+    entry.async_on_unload(coordinator.async_add_listener(_handle_coordinator_update))
 
     # Return the coordinator for the main sensor module to track
     return coordinator

@@ -267,7 +267,7 @@ async def async_setup_entry(
             device_stats = coordinator.data["device_statistics"]
             if wireless_whitelist:
                 for mac, device_info in device_stats.items():
-                    ip_address = device_info.get("ip", "")
+                    ip_address = device_info.get("ip_address", "")
                     mac_upper = mac.upper()
                     if any(
                         mac_upper.startswith(prefix.upper()) or 
@@ -294,7 +294,7 @@ async def async_setup_entry(
             _LOGGER.info("Found %d new devices for tracking: %s", len(new_devices), new_devices)
             new_entities = await _create_entities_for_devices(hass, entry, coordinator, new_devices)
             if new_entities:
-                async_add_entities(new_entities, True)
+                async_add_entities(new_entities)
                 _LOGGER.info("Created %d device tracker entities", len(new_entities))
 
     def _handle_coordinator_update():
@@ -317,7 +317,7 @@ async def async_setup_entry(
             device_stats = coordinator.data["device_statistics"]
             if wireless_whitelist:
                 for mac, device_info in device_stats.items():
-                    ip_address = device_info.get("ip", "")
+                    ip_address = device_info.get("ip_address", "")
                     mac_upper = mac.upper()
                     if any(
                         mac_upper.startswith(prefix.upper()) or 
@@ -342,7 +342,7 @@ async def async_setup_entry(
 
         new_entities = await _create_entities_for_devices(hass, entry, coordinator, device_macs)
         if new_entities:
-            async_add_entities(new_entities, True)
+            async_add_entities(new_entities)
             _LOGGER.info("Created %d initial device tracker entities", len(new_entities))
         else:
             _LOGGER.info("No new entities to create (all devices already exist)")
@@ -350,7 +350,7 @@ async def async_setup_entry(
         _LOGGER.info("No devices found in initial scan, entities will be created dynamically as devices are discovered")
 
     # Register the update listener
-    coordinator.async_add_listener(_handle_coordinator_update)
+    entry.async_on_unload(coordinator.async_add_listener(_handle_coordinator_update))
 
 
 async def _restore_known_devices_from_registry(

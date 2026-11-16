@@ -272,7 +272,7 @@ async def async_setup_entry(
             )
             entities.append(SystemInfoSensor(coordinator, temp_description))
 
-    async_add_entities(entities, True)
+    async_add_entities(entities)
 
     return coordinator
 

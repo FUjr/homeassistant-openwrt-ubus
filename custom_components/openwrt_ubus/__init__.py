@@ -17,6 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 
 from .Ubus.const import API_DEF_TIMEOUT
@@ -212,14 +213,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # {"result": [0, {"values": {"enabled": "1", ...}}]}
                 value = None
                 try:
-                    res_list = result.get("result", [])
-                    if len(res_list) >= 2:
-                        values_dict = res_list[1].get("values", {})
-                        if option is not None:
-                            value = values_dict.get(option)
-                        elif values_dict:
-                            # if no option specified, grab first value
-                            value = next(iter(values_dict.values()))
+                    if isinstance(result, dict):
+                        if "value" in result:
+                            # uci get with section+option -> {"value": "..."}
+                            value = result["value"]
+                        else:
+                            # uci get with section only -> {"values": {...}}
+                            values_dict = result.get("values", {})
+                            if option is not None:
+                                value = values_dict.get(option)
+                            elif values_dict:
+                                # if no option specified, grab first value
+                                value = next(iter(values_dict.values()))
                 except Exception as exc:
                     _LOGGER.warning("Failed to parse UCI get result: %s", exc)
 
@@ -309,19 +314,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         except Exception as exc:
                             _LOGGER.warning("Failed to restart service %s: %s", service_name, exc)
 
-            hass.services.async_register(
+            async_register_admin_service(
+                hass,
                 DOMAIN,
                 "uci_get",
                 async_handle_uci_get,
             )
 
-            hass.services.async_register(
+            async_register_admin_service(
+                hass,
                 DOMAIN,
                 "uci_set_commit",
                 async_handle_uci_set_commit,
             )
 
-            hass.services.async_register(
+            async_register_admin_service(
+                hass,
                 DOMAIN,
                 "uci_network_interface",
                 async_handle_uci_network_interface,
@@ -472,7 +480,7 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
         for name, enabled, main_id in sensors:
             if enabled:
                 continue
-            main_device = device_registry.async_get_device(identifiers={(DOMAIN, f"{host}_eth")})
+            main_device = device_registry.async_get_device(identifiers={(DOMAIN, main_id)})
             if not main_device:
                 continue
             removed_count = 0
@@ -504,15 +512,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Clean up coordinators
         if DOMAIN in hass.data and "coordinators" in hass.data[DOMAIN]:
-            coordinators = hass.data[DOMAIN]["coordinators"]
-            for coordinator in coordinators:
-                if hasattr(coordinator, "async_shutdown"):
-                    try:
-                        await coordinator.async_shutdown()
-                    except Exception as exc:
-                        _LOGGER.debug("Error shutting down coordinator: %s", exc)
-            # Clear the coordinators list
-            hass.data[DOMAIN]["coordinators"] = []
+            remaining = []
+            for coordinator in hass.data[DOMAIN]["coordinators"]:
+                # Only touch coordinators of the entry being unloaded; other routers keep running
+                if getattr(coordinator, "config_entry", None) is not entry:
+                    remaining.append(coordinator)
+                    continue
+                try:
+                    await coordinator.async_shutdown()
+                except Exception as exc:
+                    _LOGGER.debug("Error shutting down coordinator: %s", exc)
+            hass.data[DOMAIN]["coordinators"] = remaining
 
         # Clean up entry-specific data
         hass.data[DOMAIN].pop(f"entry_data_{entry.entry_id}", None)

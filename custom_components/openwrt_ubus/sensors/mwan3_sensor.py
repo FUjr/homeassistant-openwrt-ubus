@@ -248,7 +248,7 @@ async def async_setup_entry(
 
             # Add new entities only if there are any
             if new_entities:
-                async_add_entities(new_entities, True)
+                async_add_entities(new_entities)
                 _LOGGER.debug("Added %d new MWAN3 interface entities", len(new_entities))
 
         # Handle new policies
@@ -297,7 +297,7 @@ async def async_setup_entry(
 
             # Add new policy entities only if there are any
             if new_policy_entities:
-                async_add_entities(new_policy_entities, True)
+                async_add_entities(new_policy_entities)
                 _LOGGER.debug("Added %d new MWAN3 policy entities", len(new_policy_entities))
 
     # Create sync wrapper for async coordinator update handler
@@ -306,7 +306,7 @@ async def async_setup_entry(
         hass.async_create_task(_handle_coordinator_update_async())
 
     # Register the update listener
-    coordinator.async_add_listener(_handle_coordinator_update)
+    entry.async_on_unload(coordinator.async_add_listener(_handle_coordinator_update))
 
     # Fetch initial data to potentially create initial entities
     await coordinator.async_config_entry_first_refresh()
@@ -363,7 +363,7 @@ async def async_setup_entry(
 
     # Add all initial entities
     if initial_entities:
-        async_add_entities(initial_entities, True)
+        async_add_entities(initial_entities)
         _LOGGER.info(
             "Created %d initial MWAN3 entities (%d interfaces, %d policies)",
             len(initial_entities),

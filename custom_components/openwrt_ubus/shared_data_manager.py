@@ -589,11 +589,6 @@ class SharedUbusDataManager:
             # Debug log the raw response
             _LOGGER.debug("Raw network devices response: %s", result)
 
-            # Handle different response formats
-            if isinstance(result, dict) and "values" in result:
-                # Some OpenWrt versions return data in "values" field
-                network_devices = result["values"]
-
             # Handle empty response due to permission issues
             if not result:
                 _LOGGER.warning(
@@ -601,8 +596,8 @@ class SharedUbusDataManager:
                 )
                 return {"network_devices": {}}
             elif isinstance(result, dict):
-                # Standard response format
-                network_devices = result
+                # Some OpenWrt versions return data in a "values" field
+                network_devices = result["values"] if isinstance(result.get("values"), dict) else result
             else:
                 # Unexpected format
                 _LOGGER.error("Unexpected network devices response format: %s", type(result))
@@ -1155,6 +1150,7 @@ class SharedDataUpdateCoordinator(DataUpdateCoordinator):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=data_manager.entry,
             name=name,
             update_interval=update_interval,
         )
@@ -1182,8 +1178,3 @@ class SharedDataUpdateCoordinator(DataUpdateCoordinator):
             )
             raise UpdateFailed(f"Error communicating with API: {exc}")
 
-    async def async_shutdown(self):
-        """Shutdown the coordinator."""
-        # Note: Don't close the data manager here as it might be shared
-        # The data manager will be closed when the integration is unloaded
-        pass

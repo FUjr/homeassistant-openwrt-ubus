@@ -50,7 +50,7 @@ async def async_setup_entry(
         _LOGGER.debug("Created restart button entity for service: %s", service_name)
 
     if entities:
-        async_add_entities(entities, True)
+        async_add_entities(entities)
         _LOGGER.info("Created %d service restart button entities", len(entities))
 
 

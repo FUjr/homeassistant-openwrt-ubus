@@ -230,7 +230,7 @@ async def async_setup_entry(
 
     # Create QModem sensor entities
     entities = [QModemSensor(coordinator, description) for description in SENSOR_DESCRIPTIONS]
-    async_add_entities(entities, True)
+    async_add_entities(entities)
     _LOGGER.info("QModem entities created - modem_ctrl is available")
 
     return coordinator

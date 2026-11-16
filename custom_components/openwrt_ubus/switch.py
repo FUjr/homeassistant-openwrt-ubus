@@ -78,7 +78,7 @@ async def async_setup_entry(
         _LOGGER.debug("Created switch entity for service: %s", service_name)
 
     if entities:
-        async_add_entities(entities, True)
+        async_add_entities(entities)
         _LOGGER.info("Created %d service switch entities", len(entities))
 
 

@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import time
+from copy import deepcopy
 from typing import Any
 
 import aiohttp
@@ -105,10 +106,10 @@ class Ubus:
 
     async def _ensure_session_is_valid(self):
         """Ensure session is still valid, serialising reconnect attempts with a lock."""
-        if self.session_expire <= (time.time() - 15):
+        if self.session_expire <= (time.time() + 15):
             async with self._connect_lock:
                 # Double-check: another coroutine may have reconnected while we waited
-                if self.session_expire <= (time.time() - 15):
+                if self.session_expire <= (time.time() + 15):
                     await self.connect()
 
     async def api_call(
@@ -118,14 +119,40 @@ class Ubus:
         method: str | None = None,
         params: dict | None = None,
     ) -> dict | list | None:
-        """Perform API call."""
+        """Perform API call (re-logins once if the router dropped our session)."""
         await self._ensure_session_is_valid()
-        return await self._api_call(rpc_method, subsystem, method, params)
+        try:
+            return await self._api_call(rpc_method, subsystem, method, params)
+        except PermissionError:
+            if not await self._relogin_after_denied():
+                raise
+            return await self._api_call(rpc_method, subsystem, method, params)
+
+    async def _relogin_after_denied(self) -> bool:
+        """Re-login after "Access denied", at most once per 30 s.
+
+        After a router reboot or rpcd restart the old session id is invalid and every
+        call is answered with -32002, even though our local expiry time is still in
+        the future. A real ACL denial would fail again after the re-login, and the
+        cooldown keeps that case from re-logging in on every poll.
+        """
+        now = time.monotonic()
+        if now - getattr(self, "_last_relogin", -1e9) < 30:
+            return False
+        async with self._connect_lock:
+            self._last_relogin = time.monotonic()
+            self.session_expire = 0
+            return await self.connect() is not None
 
     async def batch_call(self, rpcs: list[PreparedCall]) -> list[tuple[str, dict | list | None | Exception]] | None:
         """Execute multiple API calls in a single batch request."""
         await self._ensure_session_is_valid()
-        return await self._batch_call(rpcs)
+        results = await self._batch_call(list(rpcs))
+        if results and any(isinstance(r, PermissionError) for _, r in results):
+            # Only re-login when the denial was caused by a dead session
+            if await self._relogin_after_denied():
+                results = await self._batch_call(list(rpcs))
+        return results
 
     async def _batch_call(self, rpcs: list[PreparedCall]) -> list[tuple[str, dict | list | None | Exception]] | None:
         self._ensure_session()
@@ -168,8 +195,8 @@ class Ubus:
                     url=self.url,
                     server_hostname=self.hostname,
                     data=json.dumps(rpc_calls),
-                    timeout=self.timeout,
-                    verify_ssl=self.verify,
+                    timeout=aiohttp.ClientTimeout(total=self.timeout),
+                    ssl=None if self.verify else False,
                 )
                 break
             except aiohttp.ClientConnectionError as e:
@@ -185,9 +212,10 @@ class Ubus:
                 raise ConnectionError(f"Unexpected error when calling API: {e}")
 
         if response.status != HTTP_STATUS_OK:
+            response.release()
             return None
 
-        responses = await response.json()
+        responses = await response.json(content_type=None)
 
         if self.debug_api:
             _LOGGER.debug(
@@ -274,7 +302,7 @@ class Ubus:
                             _append_result(ConnectionError(f"Unexpected API call result format: {result}"))
                     else:
                         _append_result(result)
-            if results[-1][0] == "refresh_expiration":
+            if results and results[-1][0] == "refresh_expiration":
                 session_response = results.pop()[1]
                 if isinstance(session_response, Exception):
                     try:
@@ -298,12 +326,16 @@ class Ubus:
         params: dict | None = None,
     ) -> dict | list | None:
         if self.debug_api:
+            safe_params = params
+            if isinstance(params, dict) and API_PARAM_PASSWORD in params:
+                safe_params = deepcopy(params)
+                safe_params[API_PARAM_PASSWORD] = "***"
             _LOGGER.debug(
                 'api call: rpc_method="%s" subsystem="%s" method="%s" params="%s"',
                 rpc_method,
                 subsystem,
                 method,
-                params,
+                safe_params,
             )
 
         results = await self._batch_call(
