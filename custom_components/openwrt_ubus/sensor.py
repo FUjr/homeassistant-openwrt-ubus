@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -91,57 +92,38 @@ async def async_setup_entry(
     """Set up OpenWrt sensors from a config entry."""
     _LOGGER.info("Setting up OpenWrt sensors")
 
-    coordinators = []
-
-    # Setup each sensor module based on configuration
-    for sensor_config in SENSOR_MODULES:
+    # Modules are independent: each does its own first refresh against the router,
+    # so run them concurrently instead of one after another (sequential setup took
+    # >10 s and triggered "Setup of sensor platform is taking over 10 seconds").
+    async def _setup_module(sensor_config: dict):
         module = sensor_config["module"]
-        config_key = sensor_config["config_key"]
-        default_enabled = sensor_config["default"]
         module_name = sensor_config["name"]
 
-        # Check if this sensor type is enabled
         # Priority: options > data > default
-        enabled = entry.options.get(config_key, entry.data.get(config_key, default_enabled))
-
+        enabled = entry.options.get(
+            sensor_config["config_key"], entry.data.get(sensor_config["config_key"], sensor_config["default"])
+        )
         if not enabled:
-            _LOGGER.info("Sensor module %s is disabled in configuration", module_name)
-            continue
+            _LOGGER.debug("Sensor module %s is disabled in configuration", module_name)
+            return None
+        if not hasattr(module, "async_setup_entry"):
+            _LOGGER.warning("Sensor module %s has no async_setup_entry function", module_name)
+            return None
 
         try:
-            # Check if module has async_setup_entry function
-            if hasattr(module, "async_setup_entry"):
-                _LOGGER.debug("Loading sensor module: %s", module_name)
-                try:
-                    # Call the module's setup function
-                    coordinator = await module.async_setup_entry(hass, entry, async_add_entities)
-                except Exception as exc:
-                    # If the error is from the eth_sensor module, log with eth_sensor logger
-                    if module_name == "eth_sensor":
-                        eth_logger = logging.getLogger("custom_components.openwrt_ubus.sensors.eth_sensor")
-                        eth_logger.error("Error accessing coordinator for eth_sensor: %s", exc)
-                        eth_logger.error("eth_sensor module entry data: %s", entry.data)
-                        eth_logger.error("eth_sensor module entry options: %s", entry.options)
-                    else:
-                        _LOGGER.error("Error setting up sensor module %s: %s", module_name, exc)
-                    coordinator = None
-
-                if coordinator:
-                    coordinators.append(coordinator)
-                    _LOGGER.info("Successfully loaded sensor module: %s", module_name)
-                else:
-                    _LOGGER.debug("Sensor module %s returned no coordinator", module_name)
-            else:
-                _LOGGER.warning("Sensor module %s has no async_setup_entry function", module_name)
-
-        except Exception as exc:
+            _LOGGER.debug("Loading sensor module: %s", module_name)
+            coordinator = await module.async_setup_entry(hass, entry, async_add_entities)
+        except Exception as exc:  # noqa: BLE001 - one broken module must not break the others
             _LOGGER.error("Error setting up sensor module %s: %s", module_name, exc)
+            return None
 
-    _LOGGER.info("Completed loading of %d sensor modules", len(coordinators))
+        if coordinator is None:
+            _LOGGER.debug("Sensor module %s returned no coordinator", module_name)
+        return coordinator
 
-    # Store coordinators in hass data for cleanup
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
-    if "coordinators" not in hass.data[DOMAIN]:
-        hass.data[DOMAIN]["coordinators"] = []
-    hass.data[DOMAIN]["coordinators"].extend(coordinators)
+    results = await asyncio.gather(*(_setup_module(cfg) for cfg in SENSOR_MODULES))
+    coordinators = [c for c in results if c]
+    _LOGGER.debug("Completed loading of %d sensor modules", len(coordinators))
+
+    # Remember coordinators so they are shut down on unload
+    entry.runtime_data.coordinators.extend(coordinators)

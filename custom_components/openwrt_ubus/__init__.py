@@ -14,12 +14,13 @@ from homeassistant.const import (
     CONF_VERIFY_SSL,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 
+from .Ubus.interface import AuthenticationError
 from .Ubus.const import API_DEF_TIMEOUT
 from .const import (
     CONF_DHCP_SOFTWARE,
@@ -55,38 +56,18 @@ from .const import (
     build_ubus_url,
 )
 from .extended_ubus import ExtendedUbus
+from .runtime import OpenwrtRuntimeData
+from .services import async_setup_services
 from .shared_data_manager import SharedUbusDataManager
 
 _LOGGER = logging.getLogger(__name__)
 
-CONFIG_SCHEMA = vol.Schema(
-    {
-        DOMAIN: vol.Schema(
-            {
-                vol.Required(CONF_HOST): cv.string,
-                vol.Optional(CONF_IP_ADDRESS): cv.string,
-                vol.Optional(CONF_VERIFY_SSL, default=False): cv.boolean,
-                vol.Required(CONF_USERNAME): cv.string,
-                vol.Required(CONF_PASSWORD): cv.string,
-                vol.Optional(CONF_WIRELESS_SOFTWARE, default=DEFAULT_WIRELESS_SOFTWARE): vol.In(WIRELESS_SOFTWARES),
-                vol.Optional(CONF_DHCP_SOFTWARE, default=DEFAULT_DHCP_SOFTWARE): vol.In(DHCP_SOFTWARES),
-            }
-        )
-    },
-    extra=vol.ALLOW_EXTRA,
-)
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the openwrt ubus component."""
-    if DOMAIN not in config:
-        return True
-
-    hass.data.setdefault(DOMAIN, {})
-
-    # Store the configuration for the device tracker
-    hass.data[DOMAIN]["config"] = config[DOMAIN]
-
+    """Set up the integration (services are registered once, not per config entry)."""
+    await async_setup_services(hass)
     return True
 
 
@@ -124,7 +105,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
         # Test connection
-        session_id = await ubus.connect()
+        try:
+            session_id = await ubus.connect()
+        except AuthenticationError as exc:
+            raise ConfigEntryAuthFailed(f"Invalid credentials for OpenWrt device at {hostname}") from exc
         if session_id is None:
             raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {hostname}")
 
@@ -158,188 +142,44 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         modem_ctrl_available = await _check_availability(
             "Modem_ctrl", lambda: ubus.list_modem_ctrl()
         )
-        hass.data[DOMAIN]["modem_ctrl_available"] = modem_ctrl_available
 
         # Check for mwan3 availability and store the result
         mwan3_available = await _check_availability(
             "MWAN3", lambda: ubus.list_mwan3()
         )
-        hass.data[DOMAIN]["mwan3_available"] = mwan3_available
 
         # Check for nlbwmon availability/permission and store the result
         nlbwmon_available = await _check_availability(
             "nlbwmon", lambda: ubus.file_exec("/usr/sbin/nlbw", ["-h"])
         )
-        hass.data[DOMAIN]["nlbwmon_available"] = nlbwmon_available
 
         # Close the test connection — logout first to destroy the rpcd session,
         # otherwise the session lingers until rpcd's own 300 s GC runs.
         await ubus.logout()
         await ubus.close()
 
-        # Create shared data manager
+        # Create shared data manager; everything per-router lives in entry.runtime_data
         data_manager = SharedUbusDataManager(hass, entry)
-        hass.data[DOMAIN][f"data_manager_{entry.entry_id}"] = data_manager
-        # Register UCI services once per integration domain
-        if not hass.data[DOMAIN].get("uci_services_registered"):
-            hass.data[DOMAIN]["uci_services_registered"] = True
+        entry.runtime_data = OpenwrtRuntimeData(
+            data_manager=data_manager,
+            modem_ctrl_available=modem_ctrl_available,
+            mwan3_available=mwan3_available,
+            nlbwmon_available=nlbwmon_available,
+        )
 
-            async def async_handle_uci_get(call):
-                """Handle openwrt_ubus.uci_get service."""
-                config = call.data["config"]
-                section = call.data.get("section")
-                option = call.data.get("option")
-                target_entity_id = call.data.get("target_entity_id")
-
-                # Find a SharedUbusDataManager (single-router assumption)
-                shared_manager = None
-                for key, value in hass.data[DOMAIN].items():
-                    if key.startswith("data_manager_"):
-                        shared_manager = value
-                        break
-
-                if shared_manager is None:
-                    _LOGGER.error("No SharedUbusDataManager available for uci_get")
-                    return
-
-                # Use the data manager to obtain a connected ExtendedUbus client
-                client = await shared_manager._get_ubus_client()  # type: ignore[attr-defined]
-
-                # Call UCI get
-                result = await client.uci_get_option(config, section, option)
-                _LOGGER.debug("UCI get %s/%s/%s -> %s", config, section, option, result)
-
-                # Try to extract the value from ubus result structure:
-                # {"result": [0, {"values": {"enabled": "1", ...}}]}
-                value = None
-                try:
-                    if isinstance(result, dict):
-                        if "value" in result:
-                            # uci get with section+option -> {"value": "..."}
-                            value = result["value"]
-                        else:
-                            # uci get with section only -> {"values": {...}}
-                            values_dict = result.get("values", {})
-                            if option is not None:
-                                value = values_dict.get(option)
-                            elif values_dict:
-                                # if no option specified, grab first value
-                                value = next(iter(values_dict.values()))
-                except Exception as exc:
-                    _LOGGER.warning("Failed to parse UCI get result: %s", exc)
-
-                if target_entity_id and value is not None:
-                    _LOGGER.debug(
-                        "Setting state of %s to %r from UCI %s/%s/%s",
-                        target_entity_id,
-                        value,
-                        config,
-                        section,
-                        option,
-                    )
-                    # This creates or updates the entity state in HA
-                    hass.states.async_set(target_entity_id, value)
-                elif target_entity_id:
-                    _LOGGER.warning(
-                        "UCI get for %s/%s/%s returned no value; not updating %s",
-                        config,
-                        section,
-                        option,
-                        target_entity_id,
-                    )
-
-            async def async_handle_uci_network_interface(call):
-                """Handle openwrt_ubus.uci_call service."""
-                # config = call.data["config"]
-                section = call.data["section"]
-                option = call.data["option"]
-
-                # Find a SharedUbusDataManager (single-router assumption)
-                shared_manager = None
-                for key, value in hass.data[DOMAIN].items():
-                    if key.startswith("data_manager_"):
-                        shared_manager = value
-                        break
-
-                if shared_manager is None:
-                    _LOGGER.error("No SharedUbusDataManager available for uci_get")
-                    return
-
-                # Use the data manager to obtain a connected ExtendedUbus client
-                client = await shared_manager._get_ubus_client()  # type: ignore[attr-defined]
-
-                # Call UCI uci_network_interface
-                result = await client.uci_network_interface(section, option)
-                _LOGGER.debug("UBUS call %s %s", section, option)
-
-            async def async_handle_uci_set_commit(call):
-                """Handle openwrt_ubus.uci_set_commit service."""
-                config = call.data["config"]
-                section = call.data["section"]
-                option = call.data["option"]
-                value = call.data["value"]
-                services_to_restart = call.data.get("service")
-
-                shared_manager = None
-                for key, value_dm in hass.data[DOMAIN].items():
-                    if key.startswith("data_manager_"):
-                        shared_manager = value_dm
-                        break
-
-                if shared_manager is None:
-                    _LOGGER.error("No SharedUbusDataManager available for uci_set_commit")
-                    return
-
-                client = await shared_manager._get_ubus_client()  # type: ignore[attr-defined]
-
-                # Set and commit the UCI value
-                await client.uci_set_option(config, section, option, value)
-                await client.uci_commit_config(config)
-                _LOGGER.debug("UCI set+commit %s/%s %s=%r", config, section, option, value)
-
-                # Restart services if specified
-                if services_to_restart:
-                    # Handle both string and list inputs
-                    service_list = (
-                        services_to_restart if isinstance(services_to_restart, list) else [services_to_restart]
-                    )
-                    for service_name in service_list:
-                        try:
-                            result = await client.service_action(service_name, "restart")
-                            _LOGGER.info(
-                                "Restarted service %s after UCI change: %s",
-                                service_name,
-                                result,
-                            )
-                        except Exception as exc:
-                            _LOGGER.warning("Failed to restart service %s: %s", service_name, exc)
-
-            async_register_admin_service(
-                hass,
-                DOMAIN,
-                "uci_get",
-                async_handle_uci_get,
-            )
-
-            async_register_admin_service(
-                hass,
-                DOMAIN,
-                "uci_set_commit",
-                async_handle_uci_set_commit,
-            )
-
-            async_register_admin_service(
-                hass,
-                DOMAIN,
-                "uci_network_interface",
-                async_handle_uci_network_interface,
-            )
-
+    except ConfigEntryAuthFailed:
+        raise
     except Exception as exc:
         raise ConfigEntryNotReady(f"Failed to connect to OpenWrt device at {hostname}: {exc}") from exc
 
-    # Store the config entry data as a mutable dict
-    hass.data[DOMAIN][f"entry_data_{entry.entry_id}"] = dict(entry.data)
+    # Register the main router device first: child devices link to it via via_device_id,
+    # which needs a real device id.
+    dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, hostname)},
+        name=hostname,
+        manufacturer="OpenWrt",
+    )
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -351,48 +191,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+def _entry_flag(entry: ConfigEntry, key: str, default: bool) -> bool:
+    """Read a sensor toggle (priority: options > data > default)."""
+    return entry.options.get(key, entry.data.get(key, default))
+
+
 async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Clean up devices for disabled sensor types."""
+    """Remove devices that belong to disabled sensor groups.
+
+    Only devices of this config entry are looked at (the device registry no longer
+    allows lookups by identifier across config entries).
+    """
     device_registry = dr.async_get(hass)
     host = entry.data[CONF_HOST]
 
-    _LOGGER.debug("Starting device cleanup for host: %s", host)
-
-    # Check if system sensors are disabled
-    system_enabled = entry.options.get(
-        CONF_ENABLE_SYSTEM_SENSORS,
-        entry.data.get(CONF_ENABLE_SYSTEM_SENSORS, DEFAULT_ENABLE_SYSTEM_SENSORS),
-    )
-
-    # Check if QModem sensors are disabled
-    qmodem_enabled = entry.options.get(
-        CONF_ENABLE_QMODEM_SENSORS,
-        entry.data.get(CONF_ENABLE_QMODEM_SENSORS, DEFAULT_ENABLE_QMODEM_SENSORS),
-    )
-
-    # Check if STA sensors are disabled
-    sta_enabled = entry.options.get(
-        CONF_ENABLE_STA_SENSORS,
-        entry.data.get(CONF_ENABLE_STA_SENSORS, DEFAULT_ENABLE_STA_SENSORS),
-    )
-
-    # Check if AP sensors are disabled
-    ap_enabled = entry.options.get(
-        CONF_ENABLE_AP_SENSORS,
-        entry.data.get(CONF_ENABLE_AP_SENSORS, DEFAULT_ENABLE_AP_SENSORS),
-    )
-
-    # Check if eth sensors are disabled
-    eth_enabled = entry.options.get(
-        CONF_ENABLE_ETH_SENSORS,
-        entry.data.get(CONF_ENABLE_ETH_SENSORS, DEFAULT_ENABLE_ETH_SENSORS),
-    )
-
-    # Check if MWAN3 sensors are disabled
-    mwan3_enabled = entry.options.get(
-        CONF_ENABLE_MWAN3_SENSORS,
-        entry.data.get(CONF_ENABLE_MWAN3_SENSORS, DEFAULT_ENABLE_MWAN3_SENSORS),
-    )
+    system_enabled = _entry_flag(entry, CONF_ENABLE_SYSTEM_SENSORS, DEFAULT_ENABLE_SYSTEM_SENSORS)
+    qmodem_enabled = _entry_flag(entry, CONF_ENABLE_QMODEM_SENSORS, DEFAULT_ENABLE_QMODEM_SENSORS)
+    sta_enabled = _entry_flag(entry, CONF_ENABLE_STA_SENSORS, DEFAULT_ENABLE_STA_SENSORS)
+    ap_enabled = _entry_flag(entry, CONF_ENABLE_AP_SENSORS, DEFAULT_ENABLE_AP_SENSORS)
+    eth_enabled = _entry_flag(entry, CONF_ENABLE_ETH_SENSORS, DEFAULT_ENABLE_ETH_SENSORS)
+    mwan3_enabled = _entry_flag(entry, CONF_ENABLE_MWAN3_SENSORS, DEFAULT_ENABLE_MWAN3_SENSORS)
 
     _LOGGER.debug(
         "Sensor states - System: %s, QModem: %s, STA: %s, AP: %s, ETH: %s, MWAN3: %s",
@@ -404,94 +222,63 @@ async def _cleanup_disabled_sensor_devices(hass: HomeAssistant, entry: ConfigEnt
         mwan3_enabled,
     )
 
-    # List all current devices for debugging
-    all_devices = [
-        device
-        for device in device_registry.devices.values()
-        if any(identifier[0] == DOMAIN for identifier in device.identifiers)
-    ]
-    _LOGGER.debug(
-        "Current devices in registry: %s",
-        [list(device.identifiers) for device in all_devices],
-    )
+    def _find(identifier: str) -> dr.DeviceEntry | None:
+        return device_registry.async_get_device_by_identifier((DOMAIN, identifier), entry.entry_id)
 
     # If system sensors are disabled, remove the main router device
-    # (this will also remove any via_device dependencies like QModem and STA devices)
+    # (HA also detaches everything that was linked through it)
     if not system_enabled:
-        main_device = device_registry.async_get_device(identifiers={(DOMAIN, host)})
-        if main_device:
+        if main_device := _find(host):
             _LOGGER.info("Removing main router device %s (system sensors disabled)", host)
             device_registry.async_remove_device(main_device.id)
-        else:
-            _LOGGER.debug("Main router device not found for removal: %s", host)
-    else:
-        # If system sensors are enabled but QModem sensors are disabled,
-        # only remove the QModem device
-        if not qmodem_enabled:
-            qmodem_identifier = (DOMAIN, f"{host}_qmodem")
-            qmodem_device = device_registry.async_get_device(identifiers={qmodem_identifier})
-            if qmodem_device:
-                _LOGGER.info(
-                    "Removing QModem device %s (QModem sensors disabled)",
-                    f"{host}_qmodem",
-                )
-                device_registry.async_remove_device(qmodem_device.id)
-            else:
-                _LOGGER.debug("QModem device not found for removal: %s", f"{host}_qmodem")
-                # Check if device exists with different identifier pattern
-                for device in device_registry.devices.values():
-                    for identifier in device.identifiers:
-                        if identifier[0] == DOMAIN and "_qmodem" in str(identifier[1]):
-                            _LOGGER.debug("Found QModem-like device: %s", identifier)
+        return
 
-        # If STA sensors are disabled, remove all STA devices (devices with via_device pointing to main router)
-        if not sta_enabled:
-            removed_count = 0
-            # Find all devices that have via_device pointing to the main router
-            for device in list(device_registry.devices.values()):  # Use list() to avoid modification during iteration
-                if device.via_device_id:
-                    via_device = device_registry.devices.get(device.via_device_id)
-                    if via_device and (DOMAIN, host) in via_device.identifiers:
-                        # This device is connected via the main router, check if it's a STA device
-                        for identifier in device.identifiers:
-                            if (
-                                identifier[0] == DOMAIN
-                                and identifier[1] != host
-                                and identifier[1] != f"{host}_qmodem"
-                                and identifier[1] != f"{host}_eth"
-                                and identifier[1] != f"{host}_mwan3"
-                                and identifier[1] != f"{host}_ap"
-                            ):
-                                # This is a STA device (not the main router, QModem, AP device, network interface or MWAN device)
-                                _LOGGER.info(
-                                    "Removing STA device %s (STA sensors disabled)",
-                                    identifier[1],
-                                )
-                                device_registry.async_remove_device(device.id)
-                                removed_count += 1
-                                break
-            _LOGGER.debug("Removed %d STA devices", removed_count)
+    if not qmodem_enabled and (qmodem_device := _find(f"{host}_qmodem")):
+        _LOGGER.info("Removing QModem device %s_qmodem (QModem sensors disabled)", host)
+        device_registry.async_remove_device(qmodem_device.id)
 
-        sensors = [
-            ("AP", ap_enabled, f"{host}_ap"),
-            ("ETH", eth_enabled, f"{host}_eth"),
-            ("MWAN3", mwan3_enabled, f"{host}_mwan3"),
-        ]
-        for name, enabled, main_id in sensors:
-            if enabled:
+    group_ids = {host, f"{host}_qmodem", f"{host}_eth", f"{host}_mwan3", f"{host}_ap"}
+    main_device = _find(host)
+
+    # If STA sensors are disabled, remove client devices attached to the router or its AP devices
+    if not sta_enabled and main_device is not None:
+        removed_count = 0
+        for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+            if device.via_device_id is None:
                 continue
-            main_device = device_registry.async_get_device(identifiers={(DOMAIN, main_id)})
-            if not main_device:
+            parent = device_registry.async_get(device.via_device_id)
+            if parent is None:
                 continue
-            removed_count = 0
-            for device in list(device_registry.devices.values()):  # Use list() to avoid modification during iteration
-                if device.via_device_id == main_device.id:
-                    device_registry.async_remove_device(device.id)
-                    removed_count += 1
+            parent_ids = {i[1] for i in parent.identifiers if i[0] == DOMAIN}
+            # Client devices hang below the router or an "<host>_ap_<iface>" AP device
+            if not (host in parent_ids or any(i.startswith(f"{host}_ap_") for i in parent_ids)):
+                continue
+            own_ids = {i[1] for i in device.identifiers if i[0] == DOMAIN}
+            if own_ids & group_ids or any(i.startswith(f"{host}_ap_") for i in own_ids):
+                continue  # group hubs / AP devices are not clients
+            _LOGGER.info("Removing STA device %s (STA sensors disabled)", own_ids)
+            device_registry.async_remove_device(device.id)
+            removed_count += 1
+        _LOGGER.debug("Removed %d STA devices", removed_count)
 
-            _LOGGER.info("Removing %s devices", name)
-            device_registry.async_remove_device(main_device.id)
-            _LOGGER.debug("Removed %d %s devices", removed_count, name)
+    for name, enabled, group_id in (
+        ("AP", ap_enabled, f"{host}_ap"),
+        ("ETH", eth_enabled, f"{host}_eth"),
+        ("MWAN3", mwan3_enabled, f"{host}_mwan3"),
+    ):
+        if enabled:
+            continue
+        group_device = _find(group_id)
+        if group_device is None:
+            continue
+        removed_count = 0
+        for device in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+            if device.via_device_id == group_device.id:
+                device_registry.async_remove_device(device.id)
+                removed_count += 1
+        _LOGGER.info("Removing %s devices", name)
+        device_registry.async_remove_device(group_device.id)
+        _LOGGER.debug("Removed %d %s child devices", removed_count, name)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -499,43 +286,22 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
-        # Clean up shared data manager
-        data_manager_key = f"data_manager_{entry.entry_id}"
-        if DOMAIN in hass.data and data_manager_key in hass.data[DOMAIN]:
-            data_manager: SharedUbusDataManager = hass.data[DOMAIN][data_manager_key]
+        runtime: OpenwrtRuntimeData = entry.runtime_data
+        for coordinator in runtime.coordinators:
             try:
-                await data_manager.logout()
-                await data_manager.close()
-            except Exception as exc:
-                _LOGGER.debug("Error closing data manager: %s", exc)
-            hass.data[DOMAIN].pop(data_manager_key, None)
+                await coordinator.async_shutdown()
+            except Exception as exc:  # noqa: BLE001
+                _LOGGER.debug("Error shutting down coordinator: %s", exc)
+        try:
+            await runtime.data_manager.logout()
+            await runtime.data_manager.close()
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("Error closing data manager: %s", exc)
 
-        # Clean up coordinators
-        if DOMAIN in hass.data and "coordinators" in hass.data[DOMAIN]:
-            remaining = []
-            for coordinator in hass.data[DOMAIN]["coordinators"]:
-                # Only touch coordinators of the entry being unloaded; other routers keep running
-                if getattr(coordinator, "config_entry", None) is not entry:
-                    remaining.append(coordinator)
-                    continue
-                try:
-                    await coordinator.async_shutdown()
-                except Exception as exc:
-                    _LOGGER.debug("Error shutting down coordinator: %s", exc)
-            hass.data[DOMAIN]["coordinators"] = remaining
-
-        # Clean up entry-specific data
-        hass.data[DOMAIN].pop(f"entry_data_{entry.entry_id}", None)
-
-        # Clean up device kick coordinators
-        if "device_kick_coordinators" in hass.data[DOMAIN]:
-            hass.data[DOMAIN]["device_kick_coordinators"].pop(entry.entry_id, None)
-
-        # Clean up modem_ctrl availability data if no more entries
-        if len([e for e in hass.config_entries.async_entries(DOMAIN) if e.entry_id != entry.entry_id]) == 0:
-            hass.data[DOMAIN].pop("modem_ctrl_available", None)
-
-        hass.data[DOMAIN].pop("mwan3_available", None)
+        # Cross-router lookup tables (uniqueid tracking) must not keep this entry's coordinators
+        domain_data = hass.data.get(DOMAIN, {})
+        for registry in ("tracker_coordinators", "sta_sensor_coordinators", "device_kick_coordinators"):
+            domain_data.get(registry, {}).pop(entry.entry_id, None)
 
     return unload_ok
 
@@ -550,3 +316,8 @@ async def async_remove_config_entry_device(_: HomeAssistant, entry: ConfigEntry,
         ):
             return True
     return False
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Forget the tracking-method memory of a removed entry."""
+    hass.data.get(DOMAIN, {}).pop(f"tracking_method_{entry.entry_id}", None)

@@ -56,6 +56,10 @@ class RPCError(RuntimeError):
     pass
 
 
+class AuthenticationError(RuntimeError):
+    """The router rejected the username or password."""
+
+
 class Ubus:
     """Interacts with the OpenWrt ubus API."""
 
@@ -81,6 +85,10 @@ class Ubus:
         self.debug_api = API_DEF_DEBUG
         self.session_id: str | None = None
         self.session_expire = 0
+        # False after a failed connection attempt, True again after any HTTP answer
+        self.reachable = True
+        # True when the router rejected our credentials on the last login
+        self.auth_failed = False
         self._session_created_internally = False
         self._connect_lock = asyncio.Lock()
 
@@ -188,7 +196,8 @@ class Ubus:
             rpc_calls.append(rpc_call)
 
         response = None
-        retries_left = 5
+        # While the router is known to be down, fail fast instead of ~1 minute of retries
+        retries_left = 5 if self.reachable else 1
         while retries_left > 0:
             try:
                 response = await self.session.post(
@@ -203,13 +212,17 @@ class Ubus:
                 _LOGGER.warning("Connection error when calling API: %s", e)
                 retries_left -= 1
                 if retries_left == 0:
-                    raise ConnectionError(f"Failed to connect to API after multiple attempts: {e}")
+                    self.reachable = False
+                    raise ConnectionError(f"Failed to connect to API after multiple attempts: {e}") from e
                 else:
                     _LOGGER.debug("Retrying API call... (%d retries left)", retries_left)
                     await asyncio.sleep(5-retries_left)  # Brief pause before retrying
             except Exception as e:
                 _LOGGER.error("Unexpected error when calling API: %s", e)
-                raise ConnectionError(f"Unexpected error when calling API: {e}")
+                self.reachable = False
+                raise ConnectionError(f"Unexpected error when calling API: {e}") from e
+
+        self.reachable = True
 
         if response.status != HTTP_STATUS_OK:
             response.release()
@@ -384,16 +397,24 @@ class Ubus:
         self.session_expire = 0
         self.session_id = None
 
-        login = await self._api_call(
-            API_RPC_CALL,
-            API_SUBSYS_SESSION,
-            API_SESSION_METHOD_LOGIN,
-            {
-                API_PARAM_USERNAME: self.username,
-                API_PARAM_PASSWORD: self.password,
-            },
-        )
+        try:
+            login = await self._api_call(
+                API_RPC_CALL,
+                API_SUBSYS_SESSION,
+                API_SESSION_METHOD_LOGIN,
+                {
+                    API_PARAM_USERNAME: self.username,
+                    API_PARAM_PASSWORD: self.password,
+                },
+            )
+        except RPCError as err:
+            # rpcd answers a wrong user/password with ubus status 6 (permission denied)
+            if "error code 6" in str(err):
+                self.auth_failed = True
+                raise AuthenticationError("Invalid username or password") from err
+            raise
         if login and API_UBUS_RPC_SESSION in login:
+            self.auth_failed = False
             self.session_id = login[API_UBUS_RPC_SESSION]
             self.session_expire = time.time() + int(login[API_UBUS_RPC_SESSION_EXPIRES])
         else:

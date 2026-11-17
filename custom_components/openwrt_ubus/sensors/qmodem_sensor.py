@@ -29,6 +29,7 @@ from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
 )
 
+from ..device_utils import get_device_id, link_via
 from ..const import (
     DOMAIN,
     CONF_USE_HTTPS,
@@ -199,15 +200,14 @@ async def async_setup_entry(
 ) -> SharedDataUpdateCoordinator | None:
     """Set up OpenWrt QModem sensors from a config entry."""
     # Check if modem_ctrl is available from the initial setup
-    modem_ctrl_available = hass.data.get(DOMAIN, {}).get("modem_ctrl_available", False)
+    modem_ctrl_available = entry.runtime_data.modem_ctrl_available
 
     if not modem_ctrl_available:
         _LOGGER.info("QModem entities not created - modem_ctrl is not available")
         return None
 
     # Get shared data manager
-    data_manager_key = f"data_manager_{entry.entry_id}"
-    data_manager = hass.data[DOMAIN][data_manager_key]
+    data_manager = entry.runtime_data.data_manager
 
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
@@ -280,17 +280,21 @@ class QModemSensor(CoordinatorEntity, SensorEntity):
                 pass  # Use default values if extraction fails
 
         # Create a separate device for QModem
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._host}_qmodem")},
-            name=f"QModem ({self._host})",
-            manufacturer=manufacturer,
-            model=model,
-            configuration_url=build_configuration_url(
-                self._host,
-                self.coordinator.data_manager.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS),
-                self.coordinator.data_manager.entry.data.get(CONF_PORT),
+        return link_via(
+            DeviceInfo(
+                identifiers={(DOMAIN, f"{self._host}_qmodem")},
+                name=f"QModem ({self._host})",
+                manufacturer=manufacturer,
+                model=model,
+                configuration_url=build_configuration_url(
+                    self._host,
+                    self.coordinator.data_manager.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS),
+                    self.coordinator.data_manager.entry.data.get(CONF_PORT),
+                ),
             ),
-            via_device=(DOMAIN, self._host),
+            self.coordinator.hass,
+            self.coordinator.config_entry.entry_id,
+            self._host,
         )
 
     @property

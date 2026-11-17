@@ -138,25 +138,6 @@ class ExtendedUbus(Ubus):
             },
         )
 
-    # --- ETH SENSOR DEBUG/ERROR LOGGING PATCH ---
-
-    async def get_eth_sensor_coordinator(self, eth_sensor_id):
-        """
-        Try to get the coordinator for a given eth_sensor.
-        This is a stub for demonstration and error logging.
-        """
-        try:
-            # Simulate loading the eth_sensor module
-            _LOGGER.debug("Loading sensor module: eth_sensor")
-            # Simulate error accessing coordinator
-            raise KeyError(eth_sensor_id)
-        except KeyError as exc:
-            _LOGGER.error("Error accessing coordinator for eth_sensor: '%s'", eth_sensor_id)
-            _LOGGER.debug("Sensor module eth_sensor returned no coordinator")
-            return None
-
-    # --- END ETH SENSOR PATCH ---
-
     async def get_ethers_mapping(self):
         """Read /etc/ethers file to get MAC to hostname mapping."""
         try:

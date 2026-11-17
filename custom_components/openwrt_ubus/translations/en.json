@@ -68,6 +68,14 @@
           "service_timeout": "Service Status Update Interval (seconds)",
           "mwan3_sensor_timeout": "mwan3 Status Update Interval (seconds)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate {host}",
+        "description": "The router rejected the saved credentials. Enter the current username and password.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -78,7 +86,8 @@
       "no_services_found": "No services found on the router"
     },
     "abort": {
-      "already_configured": "Device is already configured"
+      "already_configured": "Device is already configured",
+      "reauth_successful": "Re-authentication was successful"
     }
   },
   "options": {

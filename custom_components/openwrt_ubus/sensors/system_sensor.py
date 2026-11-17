@@ -219,8 +219,7 @@ async def async_setup_entry(
     """Set up OpenWrt system sensors from a config entry."""
 
     # Get shared data manager
-    data_manager_key = f"data_manager_{entry.entry_id}"
-    data_manager = hass.data[DOMAIN][data_manager_key]
+    data_manager = entry.runtime_data.data_manager
 
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(

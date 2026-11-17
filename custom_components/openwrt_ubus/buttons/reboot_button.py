@@ -23,8 +23,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the system reboot button entity from a config entry."""
-    data_manager_key = f"data_manager_{entry.entry_id}"
-    data_manager = hass.data[DOMAIN][data_manager_key]
+    data_manager = entry.runtime_data.data_manager
 
     async_add_entities([OpenwrtRebootButton(data_manager, entry)])
     _LOGGER.debug("Created reboot button entity for %s", entry.data[CONF_HOST])

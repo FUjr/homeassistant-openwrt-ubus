@@ -24,6 +24,7 @@ from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
 )
 
+from ..device_utils import get_device_id, link_via
 from ..const import (
     DOMAIN,
     CONF_USE_HTTPS,
@@ -161,15 +162,14 @@ async def async_setup_entry(
 ) -> SharedDataUpdateCoordinator | None:
     """Set up OpenWrt MWAN3 sensors from a config entry."""
     # Check if mwan3 is available from the initial setup
-    mwan3_available = hass.data.get(DOMAIN, {}).get("mwan3_available", False)
+    mwan3_available = entry.runtime_data.mwan3_available
 
     if not mwan3_available:
         _LOGGER.info("MWAN3 entities not created - mwan3 is not available")
         return None
 
     # Get shared data manager
-    data_manager_key = f"data_manager_{entry.entry_id}"
-    data_manager = hass.data[DOMAIN][data_manager_key]
+    data_manager = entry.runtime_data.data_manager
 
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
@@ -318,7 +318,7 @@ async def async_setup_entry(
         identifiers={(DOMAIN, f"{host}_mwan3")},
         name=f"{host} MWAN3 Interfaces and Policies",
         manufacturer="OpenWrt",
-        via_device=(DOMAIN, host),  # Link to main router device
+        via_device_id=get_device_id(hass, entry.entry_id, host),  # Link to main router device
     )
 
     # Create initial entities for existing interfaces and policies
@@ -397,17 +397,21 @@ class MWAN3InterfaceSensor(CoordinatorEntity, SensorEntity):
     def device_info(self) -> DeviceInfo:
         """Return device info for the MWAN3 interface device."""
         # Create a separate device for each MWAN3 interface
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._host}_mwan3_intf_{self._interface}")},
-            name=f"MWAN3 Interface {self._interface} ({self._host})",
-            manufacturer="OpenWrt",
-            model="MWAN3 Interface",
-            configuration_url=build_configuration_url(
-                self._host,
-                self.coordinator.data_manager.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS),
-                self.coordinator.data_manager.entry.data.get(CONF_PORT),
+        return link_via(
+            DeviceInfo(
+                identifiers={(DOMAIN, f"{self._host}_mwan3_intf_{self._interface}")},
+                name=f"MWAN3 Interface {self._interface} ({self._host})",
+                manufacturer="OpenWrt",
+                model="MWAN3 Interface",
+                configuration_url=build_configuration_url(
+                    self._host,
+                    self.coordinator.data_manager.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS),
+                    self.coordinator.data_manager.entry.data.get(CONF_PORT),
+                ),
             ),
-            via_device=(DOMAIN, f"{self._host}_mwan3"),
+            self.coordinator.hass,
+            self.coordinator.config_entry.entry_id,
+            f"{self._host}_mwan3",
         )
 
     @property
@@ -553,17 +557,21 @@ class MWAN3PolicySensor(CoordinatorEntity, SensorEntity):
     def device_info(self) -> DeviceInfo:
         """Return device info for the MWAN3 policy device."""
         # Create a separate device for each MWAN3 policy
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._host}_mwan3_policy_{self._policy}")},
-            name=f"MWAN3 Policy {self._policy} ({self._host})",
-            manufacturer="OpenWrt",
-            model="MWAN3 Policy",
-            configuration_url=build_configuration_url(
-                self._host,
-                self.coordinator.data_manager.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS),
-                self.coordinator.data_manager.entry.data.get(CONF_PORT),
+        return link_via(
+            DeviceInfo(
+                identifiers={(DOMAIN, f"{self._host}_mwan3_policy_{self._policy}")},
+                name=f"MWAN3 Policy {self._policy} ({self._host})",
+                manufacturer="OpenWrt",
+                model="MWAN3 Policy",
+                configuration_url=build_configuration_url(
+                    self._host,
+                    self.coordinator.data_manager.entry.data.get(CONF_USE_HTTPS, DEFAULT_USE_HTTPS),
+                    self.coordinator.data_manager.entry.data.get(CONF_PORT),
+                ),
             ),
-            via_device=(DOMAIN, f"{self._host}_mwan3"),
+            self.coordinator.hass,
+            self.coordinator.config_entry.entry_id,
+            f"{self._host}_mwan3",
         )
 
     @property

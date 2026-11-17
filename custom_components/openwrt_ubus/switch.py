@@ -53,8 +53,7 @@ async def async_setup_entry(
         return
 
     # Get shared data manager
-    data_manager_key = f"data_manager_{entry.entry_id}"
-    data_manager = hass.data[DOMAIN][data_manager_key]
+    data_manager = entry.runtime_data.data_manager
 
     # Create coordinator using shared data manager for service status
     coordinator = SharedDataUpdateCoordinator(

@@ -45,6 +45,7 @@ from .const import (
     DEFAULT_SERVICE_TIMEOUT,
     build_ubus_url,
 )
+from .Ubus.interface import AuthenticationError
 from .extended_ubus import ExtendedUbus
 
 _LOGGER = logging.getLogger(__name__)
@@ -111,16 +112,30 @@ class SharedUbusDataManager:
 
         # Initialize ubus clients
         self._ubus_clients: Dict[str, ExtendedUbus] = {}
+        self._client_lock = asyncio.Lock()
+        self._connect_failed = False
         self._session = None
 
     async def logout(self):
         """Logout all ubus clients."""
         for client in self._ubus_clients.values():
-            await client.logout()
+            try:
+                await client.logout()
+            except Exception as exc:  # noqa: BLE001 - best effort on unload
+                _LOGGER.debug("Error during ubus logout: %s", exc)
 
     async def _get_ubus_client(self, client_type: str = "default") -> ExtendedUbus:
-        """Get or create ubus client instance."""
-        if client_type not in self._ubus_clients:
+        """Get the ubus client of this router, creating and logging in on first use.
+
+        All callers share one client (one rpcd session per router instead of one per
+        data type). The client re-logins by itself when its session expires.
+        """
+        client_type = "default"
+        if client_type in self._ubus_clients:
+            return self._ubus_clients[client_type]
+        async with self._client_lock:
+            if client_type in self._ubus_clients:  # created while we waited for the lock
+                return self._ubus_clients[client_type]
             if self._session is None:
                 self._session = async_get_clientsession(
                     self.hass,
@@ -153,11 +168,24 @@ class SharedUbusDataManager:
                 if session_id is None:
                     raise UpdateFailed(f"Failed to connect to OpenWrt device")
                 self._ubus_clients[client_type] = client
+                self._connect_failed = False
             except Exception as exc:
+                self._connect_failed = True
+                if isinstance(exc, AuthenticationError):
+                    self.entry.async_start_reauth(self.hass)
                 _LOGGER.error("Failed to connect ubus client %s: %s", client_type, exc)
-                raise UpdateFailed(f"Failed to connect ubus client {client_type}: {exc}")
+                raise UpdateFailed(f"Failed to connect ubus client {client_type}: {exc}") from exc
 
         return self._ubus_clients[client_type]
+
+    async def async_get_client(self) -> ExtendedUbus:
+        """Return the connected ubus client of this router."""
+        return await self._get_ubus_client()
+
+    @property
+    def is_reachable(self) -> bool:
+        """False when the router could not be reached on the last attempt."""
+        return not self._connect_failed and all(c.reachable for c in self._ubus_clients.values())
 
     def get_ubus_connection(self) -> ExtendedUbus:
         """Get an existing ubus connection for external use."""
@@ -320,174 +348,97 @@ class SharedUbusDataManager:
     async def _fetch_hostapd_data(
         self, mac2name: Dict[str, Dict[str, str]], interface_to_ssid: Dict[str, str]
     ) -> Dict[str, Any]:
-        """Fetch data from hostapd using optimized batch calls."""
-        client = await self._get_ubus_client("hostapd")
+        """Fetch wireless clients from hostapd using batch calls."""
+        client = await self._get_ubus_client()
         try:
-            # Get AP devices
             ap_devices_result = await client.get_hostapd()
             ap_devices = list(ap_devices_result.keys()) if ap_devices_result else []
-
-            device_statistics = {}
-
-            # Store interface to SSID mapping for AP devices
-            ap_interface_mapping = {}
-
-            # Use batch call to get STA data for all AP devices at once
-            sta_data_batch = await client.get_all_sta_data_batch(ap_devices, is_hostapd=True)
-
-            for ap_device in ap_devices:
-                if ap_device not in sta_data_batch:
-                    continue
-
-                ssid = interface_to_ssid.get(ap_device, ap_device)
-                ap_interface_mapping[ssid] = ap_device
-
-                sta_devices = sta_data_batch[ap_device].get("devices", [])
-                sta_stats = sta_data_batch[ap_device].get("statistics", {})
-
-                # Ensure sta_stats is a dictionary (safety check)
-                if not isinstance(sta_stats, dict):
-                    _LOGGER.warning(
-                        "Expected statistics to be dict for %s, got %s: %s",
-                        ap_device,
-                        type(sta_stats).__name__,
-                        sta_stats,
-                    )
-                    sta_stats = {}
-
-                for mac in sta_devices:
-                    normalized_mac = mac.upper()
-                    # Get hostname from ethers or DHCP, fallback to MAC if not found
-                    hostname_data = mac2name.get(normalized_mac, {})
-                    hostname = hostname_data.get("hostname", normalized_mac.replace(":", ""))
-                    ip_address = hostname_data.get("ip", "Unknown IP")
-
-                    # Use SSID instead of physical interface name for display
-                    display_ap = ssid
-
-                    # Merge connection info with detailed statistics
-                    device_info = {
-                        "mac": normalized_mac,
-                        "hostname": hostname,
-                        "ap_device": ap_device,  # Keep physical interface for technical reference
-                        "ap_ssid": display_ap,  # Add SSID for display
-                        "connected": True,
-                        "ip_address": ip_address,
-                    }
-
-                    # Add statistics if available and valid
-                    if isinstance(sta_stats, dict) and normalized_mac in sta_stats:
-                        stats_data = sta_stats[normalized_mac]
-                        if isinstance(stats_data, dict):
-                            device_info.update(stats_data)
-                        else:
-                            _LOGGER.warning(
-                                "Expected stats data to be dict for MAC %s, got %s",
-                                normalized_mac,
-                                type(stats_data).__name__,
-                            )
-
-                    device_statistics[normalized_mac] = device_info
-
-            return {
-                "device_statistics": device_statistics,
-                "ap_interface_mapping": ap_interface_mapping,
-            }
+            return await self._collect_wireless_data(client, ap_devices, True, mac2name, interface_to_ssid)
         except Exception as exc:
             _LOGGER.error("Error fetching hostapd data: %s", exc)
-            raise UpdateFailed(f"Error fetching hostapd data: {exc}")
+            _LOGGER.debug("hostapd data fetch error details", exc_info=True)
+            raise UpdateFailed(f"Error fetching hostapd data: {exc}") from exc
 
     async def _fetch_iwinfo_data(
         self, mac2name: Dict[str, Dict[str, str]], interface_to_ssid: Dict[str, str]
     ) -> Dict[str, Any]:
-        """Fetch data from iwinfo using optimized batch calls."""
-        client = await self._get_ubus_client("iwinfo")
+        """Fetch wireless clients from iwinfo using batch calls."""
+        client = await self._get_ubus_client()
         try:
-            # Get AP devices
             ap_devices_result = await client.get_ap_devices()
             ap_devices = client.parse_ap_devices(ap_devices_result) if ap_devices_result else []
-
-            # Skip if no wireless devices found
             if not ap_devices:
                 return {}
-
-            device_statistics = {}
-            ap_interface_mapping = {}
-
-            # Use batch call to get STA data for all AP devices at once
-            sta_data_batch = await client.get_all_sta_data_batch(ap_devices, is_hostapd=False)
-
-            for ap_device in ap_devices:
-                if ap_device not in sta_data_batch:
-                    continue
-
-                # Store the physical interface name for this AP
-                ssid = interface_to_ssid.get(ap_device, ap_device)
-                ap_interface_mapping[ssid] = ap_device
-
-                device_data = sta_data_batch[ap_device]
-                sta_devices = device_data.get("devices", [])
-                sta_stats = device_data.get("statistics", {})
-
-                # Ensure sta_stats is a dictionary (safety check)
-                if not isinstance(sta_stats, dict):
-                    _LOGGER.warning(
-                        "Expected statistics to be dict for %s, got %s: %s",
-                        ap_device,
-                        type(sta_stats).__name__,
-                        sta_stats,
-                    )
-                    sta_stats = {}
-
-                for mac in sta_devices:
-                    normalized_mac = mac.upper()
-
-                    # Get hostname from ethers or DHCP
-                    hostname_data = mac2name.get(normalized_mac, {})
-                    hostname = hostname_data.get("hostname", normalized_mac.replace(":", ""))
-                    ip_address = hostname_data.get("ip", "Unknown IP")
-
-                    # Use SSID instead of physical interface name for display
-                    display_ap = ssid
-
-                    # Merge connection info with detailed statistics
-                    device_info = {
-                        "mac": normalized_mac,
-                        "hostname": hostname,
-                        "ap_device": ap_device,  # Keep physical interface
-                        "ap_ssid": display_ap,  # Add SSID for display
-                        "connected": True,
-                        "ip_address": ip_address,
-                    }
-
-                    # Add statistics if available and valid
-                    if isinstance(sta_stats, dict) and normalized_mac in sta_stats:
-                        stats_data = sta_stats[normalized_mac]
-                        if isinstance(stats_data, dict):
-                            device_info.update(stats_data)
-                        else:
-                            _LOGGER.warning(
-                                "Expected stats data to be dict for MAC %s, got %s",
-                                normalized_mac,
-                                type(stats_data).__name__,
-                            )
-
-                    device_statistics[normalized_mac] = device_info
-
-            return {
-                "device_statistics": device_statistics,
-                "ap_interface_mapping": ap_interface_mapping,
-            }
-        except AttributeError as exc:
-            # Handle specific case where result format is unexpected
-            _LOGGER.error("Error fetching iwinfo data - unexpected data format: %s", exc)
-            _LOGGER.debug("iwinfo data fetch error details", exc_info=True)
-            # Return empty result to prevent integration failure
-            return {"device_statistics": {}}
+            return await self._collect_wireless_data(client, ap_devices, False, mac2name, interface_to_ssid)
         except Exception as exc:
+            # An unexpected response must not wipe the device list: fail the update so the
+            # last good data is kept instead of reporting every client as gone.
             _LOGGER.error("Error fetching iwinfo data: %s", exc)
             _LOGGER.debug("iwinfo data fetch error details", exc_info=True)
-            raise UpdateFailed(f"Error fetching iwinfo data: {exc}")
+            raise UpdateFailed(f"Error fetching iwinfo data: {exc}") from exc
+
+    async def _collect_wireless_data(
+        self,
+        client: ExtendedUbus,
+        ap_devices: list[str],
+        is_hostapd: bool,
+        mac2name: Dict[str, Dict[str, str]],
+        interface_to_ssid: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """Merge station lists and statistics of all AP interfaces (shared by hostapd and iwinfo)."""
+        device_statistics: Dict[str, Dict[str, Any]] = {}
+        ap_interface_mapping: Dict[str, str] = {}
+
+        sta_data_batch = await client.get_all_sta_data_batch(ap_devices, is_hostapd=is_hostapd)
+
+        for ap_device in ap_devices:
+            if ap_device not in sta_data_batch:
+                continue
+
+            # Display the SSID, keep the physical interface for technical reference
+            ssid = interface_to_ssid.get(ap_device, ap_device)
+            ap_interface_mapping[ssid] = ap_device
+
+            sta_devices = sta_data_batch[ap_device].get("devices", [])
+            sta_stats = sta_data_batch[ap_device].get("statistics", {})
+            if not isinstance(sta_stats, dict):
+                _LOGGER.warning(
+                    "Expected statistics to be dict for %s, got %s: %s",
+                    ap_device,
+                    type(sta_stats).__name__,
+                    sta_stats,
+                )
+                sta_stats = {}
+
+            for mac in sta_devices:
+                normalized_mac = mac.upper()
+                # Hostname/IP from ethers or DHCP; fall back to the MAC
+                hostname_data = mac2name.get(normalized_mac, {})
+                device_info = {
+                    "mac": normalized_mac,
+                    "hostname": hostname_data.get("hostname", normalized_mac.replace(":", "")),
+                    "ap_device": ap_device,
+                    "ap_ssid": ssid,
+                    "connected": True,
+                    "ip_address": hostname_data.get("ip", "Unknown IP"),
+                }
+
+                stats_data = sta_stats.get(normalized_mac)
+                if isinstance(stats_data, dict):
+                    device_info.update(stats_data)
+                elif stats_data is not None:
+                    _LOGGER.warning(
+                        "Expected stats data to be dict for MAC %s, got %s",
+                        normalized_mac,
+                        type(stats_data).__name__,
+                    )
+
+                device_statistics[normalized_mac] = device_info
+
+        return {
+            "device_statistics": device_statistics,
+            "ap_interface_mapping": ap_interface_mapping,
+        }
 
     async def _get_mac2name_mapping(self, dhcp_software: str) -> Dict[str, Dict[str, str]]:
         """Generate MAC to name/IP mapping based on DHCP server."""
@@ -1094,6 +1045,14 @@ class SharedUbusDataManager:
                 combined_data.update(data)
             except Exception as exc:
                 _LOGGER.error("Error fetching %s: %s", data_type, exc)
+
+        if any(c.auth_failed for c in self._ubus_clients.values()):
+            self.entry.async_start_reauth(self.hass)
+            raise UpdateFailed("OpenWrt rejected the saved credentials")
+
+        if not self.is_reachable:
+            # Entities become unavailable; they recover on the first successful poll
+            raise UpdateFailed(f"OpenWrt device {self.entry.data.get(CONF_HOST)} is unreachable")
 
         return combined_data
 

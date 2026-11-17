@@ -28,6 +28,7 @@ from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
 )
 
+from ..device_utils import get_device_id, link_via
 from ..const import (
     DOMAIN,
     CONF_AP_SENSOR_TIMEOUT,
@@ -274,8 +275,7 @@ async def async_setup_entry(
     """Set up the access point sensors from a config entry."""
 
     # Get shared data manager
-    data_manager_key = f"data_manager_{entry.entry_id}"
-    data_manager = hass.data[DOMAIN][data_manager_key]
+    data_manager = entry.runtime_data.data_manager
 
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
@@ -381,7 +381,7 @@ async def async_setup_entry(
         identifiers={(DOMAIN, f"{host}_ap")},
         name=f"{host} Access Points",
         manufacturer="OpenWrt",
-        via_device=(DOMAIN, host),  # Link to main router device
+        via_device_id=get_device_id(hass, entry.entry_id, host),  # Link to main router device
     )
 
     # Add the single "Total Wireless Clients" sensor on the hub device
@@ -454,12 +454,16 @@ class ApSensor(CoordinatorEntity, SensorEntity):
                 device_name = ap_data["device_name"]
 
         # Create a device for each AP interface
-        return DeviceInfo(
-            identifiers={(DOMAIN, f"{self._host}_ap_{self.ap_device}")},
-            name=device_name,
-            manufacturer="OpenWrt",
-            model="Access Point",
-            via_device=(DOMAIN, f"{self._host}_ap"),
+        return link_via(
+            DeviceInfo(
+                identifiers={(DOMAIN, f"{self._host}_ap_{self.ap_device}")},
+                name=device_name,
+                manufacturer="OpenWrt",
+                model="Access Point",
+            ),
+            self.coordinator.hass,
+            self.coordinator.config_entry.entry_id,
+            f"{self._host}_ap",
         )
 
     @property

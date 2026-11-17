@@ -15,6 +15,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.exceptions import HomeAssistantError
 
 from ..const import DOMAIN, CONF_TRACKING_METHOD, DEFAULT_TRACKING_METHOD
+from ..device_utils import get_device_id
 from ..shared_data_manager import SharedDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -133,8 +134,7 @@ async def async_setup_entry(
     entity_registry = er.async_get(hass)
 
     # Get shared data manager
-    data_manager_key = f"data_manager_{entry.entry_id}"
-    data_manager = hass.data[DOMAIN][data_manager_key]
+    data_manager = entry.runtime_data.data_manager
 
     # Create coordinator for device kick buttons - we need device_statistics, ap_info, and hostapd_available
     from datetime import timedelta
@@ -151,7 +151,9 @@ async def async_setup_entry(
         timedelta(seconds=30),  # Update every 30 seconds
     )
 
-    # Store coordinator in hass data for later reference
+    entry.runtime_data.coordinators.append(coordinator)  # shut down on unload
+
+    # Registry for cross-router lookups
     hass.data.setdefault(DOMAIN, {})
     coordinators_key = f"device_kick_coordinators"
     if coordinators_key not in hass.data[DOMAIN]:
@@ -431,7 +433,11 @@ class DeviceKickButton(CoordinatorEntity[SharedDataUpdateCoordinator], ButtonEnt
         # For uniqueid tracking, don't set via_device since device can roam between APs
         # For combined tracking, set via_device to local AP
         if self._tracking_method == "combined" and ap_device != "unknown":
-            device_info_dict["via_device"] = (DOMAIN, f"{self._host}_ap_{ap_device}")
+            parent_id = get_device_id(
+                self.coordinator.hass, self.coordinator.config_entry.entry_id, f"{self._host}_ap_{ap_device}"
+            )
+            if parent_id is not None:
+                device_info_dict["via_device_id"] = parent_id
 
         return DeviceInfo(**device_info_dict)
 

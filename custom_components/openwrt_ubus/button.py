@@ -94,8 +94,5 @@ async def async_setup_entry(
 
     _LOGGER.info("Completed loading of %d button modules", len(coordinators))
 
-    # Store coordinators in hass data for cleanup
-    hass.data.setdefault(DOMAIN, {})
-    if "button_coordinators" not in hass.data[DOMAIN]:
-        hass.data[DOMAIN]["button_coordinators"] = []
-    hass.data[DOMAIN]["button_coordinators"].extend(coordinators)
+    # Remember coordinators so they are shut down on unload
+    entry.runtime_data.coordinators.extend(coordinators)

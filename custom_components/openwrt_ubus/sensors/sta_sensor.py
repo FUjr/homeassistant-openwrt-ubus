@@ -24,6 +24,7 @@ from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
 )
 
+from ..device_utils import get_device_id, link_via
 from ..const import (
     DOMAIN,
     CONF_STA_SENSOR_TIMEOUT,
@@ -420,8 +421,7 @@ async def async_setup_entry(
     """Set up the device statistics sensors from a config entry."""
 
     # Get shared data manager
-    data_manager_key = f"data_manager_{entry.entry_id}"
-    data_manager = hass.data[DOMAIN][data_manager_key]
+    data_manager = entry.runtime_data.data_manager
 
     # Get timeout from configuration (priority: options > data > default)
     timeout = entry.options.get(
@@ -705,7 +705,11 @@ class DeviceStatisticsSensor(CoordinatorEntity, SensorEntity):
         # For uniqueid tracking, don't set via_device since device can roam between APs
         # For combined tracking, set via_device to local AP
         if self._tracking_method == "combined" and ap_device != "Unknown AP":
-            device_info_dict["via_device"] = (DOMAIN, f"{self._host}_ap_{ap_device}")
+            parent_id = get_device_id(
+                self.coordinator.hass, self.coordinator.config_entry.entry_id, f"{self._host}_ap_{ap_device}"
+            )
+            if parent_id is not None:
+                device_info_dict["via_device_id"] = parent_id
 
         return DeviceInfo(**device_info_dict)
 

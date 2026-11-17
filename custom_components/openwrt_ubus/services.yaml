@@ -10,6 +10,13 @@ uci_get:
   name: UCI get
   description: Read a UCI value via ubus on the OpenWrt router and optionally write it to a sensor
   fields:
+    config_entry_id:
+      name: Router
+      description: Router to use. Optional when only one router is configured.
+      required: false
+      selector:
+        config_entry:
+          integration: openwrt_ubus
     config:
       name: Config
       description: UCI config name (e.g. firewall)
@@ -43,6 +50,13 @@ uci_set_commit:
   name: UCI set + commit
   description: Set a UCI option value and commit the change
   fields:
+    config_entry_id:
+      name: Router
+      description: Router to use. Optional when only one router is configured.
+      required: false
+      selector:
+        config_entry:
+          integration: openwrt_ubus
     config:
       name: Config
       description: UCI config name (e.g. firewall)
@@ -82,6 +96,13 @@ uci_network_interface:
   name: UCI call 
   description: Call  UCI via ubus on the OpenWrt router 
   fields:
+    config_entry_id:
+      name: Router
+      description: Router to use. Optional when only one router is configured.
+      required: false
+      selector:
+        config_entry:
+          integration: openwrt_ubus
     section:
       name: Section
       description: network interface (e.g. network.interface.wwan)
